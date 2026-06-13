@@ -14,6 +14,10 @@ app.use(
   }),
 );
 
+const userRoutes = require("./routes/user.route.js");
+
+app.use("/api/user", userRoutes);
+
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,

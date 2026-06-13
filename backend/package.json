@@ -8,7 +8,8 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "seed:user": "node src/scripts/addUser.js"
   },
   "keywords": [
     "nodejs",
