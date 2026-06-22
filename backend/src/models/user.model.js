@@ -3,6 +3,11 @@ const bcrypt = require("bcryptjs");
 
 const userSchema = new mongoose.Schema(
   {
+    name: {
+      type: String,
+      trim: true,
+    },
+
     email: {
       type: String,
       required: [true, "Email is required"],
@@ -51,6 +56,22 @@ const userSchema = new mongoose.Schema(
     lastLogin: {
       type: Date,
       default: null,
+    },
+
+    resetPasswordOTP: {
+      type: String,
+      select: false,
+    },
+
+    resetPasswordOTPExpiry: {
+      type: Date,
+      select: false,
+    },
+
+    resetPasswordOTPVerified: {
+      type: Boolean,
+      default: false,
+      select: false,
     },
   },
   {
