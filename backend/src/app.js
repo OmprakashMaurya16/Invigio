@@ -15,8 +15,10 @@ app.use(
 );
 
 const authRoutes = require("./routes/auth.route.js");
+const facultyRoutes = require("./routes/faculty.route.js");
 
 app.use("/api/user", authRoutes);
+app.use("/api/faculty", facultyRoutes);
 
 app.get("/", (req, res) => {
   res.status(200).json({
