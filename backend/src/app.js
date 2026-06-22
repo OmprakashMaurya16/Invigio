@@ -17,10 +17,14 @@ app.use(
 const authRoutes = require("./routes/auth.route.js");
 const facultyRoutes = require("./routes/faculty.route.js");
 const venueRoutes = require("./routes/venue.route.js");
+const examRoutes = require("./routes/exam.route.js");
+const examVenueRoutes = require("./routes/examVenue.route.js");
 
 app.use("/api/user", authRoutes);
 app.use("/api/faculty", facultyRoutes);
 app.use("/api/venues", venueRoutes);
+app.use("/api/exams", examRoutes);
+app.use("/api/exam-venues", examVenueRoutes);
 
 app.get("/", (req, res) => {
   res.status(200).json({
