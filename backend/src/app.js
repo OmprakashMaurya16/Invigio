@@ -16,9 +16,11 @@ app.use(
 
 const authRoutes = require("./routes/auth.route.js");
 const facultyRoutes = require("./routes/faculty.route.js");
+const venueRoutes = require("./routes/venue.route.js");
 
 app.use("/api/user", authRoutes);
 app.use("/api/faculty", facultyRoutes);
+app.use("/api/venues", venueRoutes);
 
 app.get("/", (req, res) => {
   res.status(200).json({
