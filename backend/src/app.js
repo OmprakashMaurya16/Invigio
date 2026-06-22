@@ -14,9 +14,9 @@ app.use(
   }),
 );
 
-const userRoutes = require("./routes/user.route.js");
+const authRoutes = require("./routes/auth.route.js");
 
-app.use("/api/user", userRoutes);
+app.use("/api/user", authRoutes);
 
 app.get("/", (req, res) => {
   res.status(200).json({

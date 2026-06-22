@@ -20,9 +20,26 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["SUPER_ADMIN", "ADMIN", "PROFESSOR"],
+      enum: ["ADMIN", "PROFESSOR"],
       default: "PROFESSOR",
       required: true,
+    },
+
+    department: {
+      type: String,
+      enum: ["INFT", "CMPN", "EXTC", "EXTX", "BIOMD", "MMS"],
+    },
+
+    phone: {
+      type: String,
+      required: [true, "Phone number is required"],
+      match: [/^[6-9]\d{9}$/, "Invalid phone number"],
+      unique: true,
+    },
+
+    maxAssignmentsPerSemester: {
+      type: Number,
+      default: 8,
     },
 
     isActive: {
