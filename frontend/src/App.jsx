@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { getAuthCredentials, clearAuthCredentials, mapRole } from "./services/auth";
 
 // Layouts
 import AdminLayout from "./layouts/AdminLayout";
@@ -10,6 +11,7 @@ import Login from "./pages/Login";
 
 // Admin Pages
 import AdminDashboard from "./pages/admin/Dashboard";
+import FacultyManagement from "./pages/admin/FacultyManagement";
 
 // Exam Management
 import ExamManagement from "./pages/admin/exam/ExamManagement";
@@ -50,7 +52,15 @@ import ProfessorNotifications from "./pages/professor/Notifications";
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userRole, setUserRole] = useState(null); // 'admin' or 'professor'
+  const [userRole, setUserRole] = useState(null);
+
+  useEffect(() => {
+    const { token, user } = getAuthCredentials();
+    if (token && user) {
+      setIsAuthenticated(true);
+      setUserRole(mapRole(user.role));
+    }
+  }, []);
 
   const handleLogin = (role) => {
     setIsAuthenticated(true);
@@ -58,6 +68,7 @@ const App = () => {
   };
 
   const handleLogout = () => {
+    clearAuthCredentials();
     setIsAuthenticated(false);
     setUserRole(null);
   };
@@ -76,18 +87,14 @@ const App = () => {
   return (
     <Router>
       <Routes>
-        {/* Admin Routes */}
         {userRole === "admin" && (
           <Route element={<AdminLayout onLogout={handleLogout} />}>
             <Route path="/admin" element={<AdminDashboard />} />
-            
-            {/* Exam Management */}
+            <Route path="/admin/faculty" element={<FacultyManagement />} />
             <Route path="/admin/exams" element={<ExamManagement />} />
             <Route path="/admin/exams/add" element={<AddExam />} />
             <Route path="/admin/exams/edit/:id" element={<EditExam />} />
             <Route path="/admin/exams/:id" element={<ExamDetails />} />
-            
-            {/* Other Management */}
             <Route path="/admin/allocations" element={<AllocationManagement />} />
             <Route path="/admin/conflicts" element={<ConflictManagement />} />
             <Route path="/admin/attendance" element={<AttendanceManagement />} />
@@ -96,12 +103,10 @@ const App = () => {
             <Route path="/admin/venues" element={<VenueManagement />} />
             <Route path="/admin/notifications" element={<AdminNotifications />} />
             <Route path="/admin/reports" element={<Reports />} />
-            
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Route>
         )}
 
-        {/* Professor Routes */}
         {userRole === "professor" && (
           <Route element={<ProfessorLayout onLogout={handleLogout} />}>
             <Route path="/professor" element={<ProfessorDashboard />} />
@@ -109,7 +114,6 @@ const App = () => {
             <Route path="/professor/availability" element={<Availability />} />
             <Route path="/professor/conflict-report" element={<ConflictReport />} />
             <Route path="/professor/notifications" element={<ProfessorNotifications />} />
-            
             <Route path="*" element={<Navigate to="/professor" replace />} />
           </Route>
         )}

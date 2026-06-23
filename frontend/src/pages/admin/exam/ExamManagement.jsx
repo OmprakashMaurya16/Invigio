@@ -1,95 +1,116 @@
-import React, { useState } from "react";
-import { Plus, Edit, Trash2, Eye } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Card from "../../../components/Card";
 import Table from "../../../components/Table";
 import Button from "../../../components/Button";
+import { getExams, deleteExam } from "../../../services/exam";
 
 const ExamManagement = () => {
   const navigate = useNavigate();
-  const [exams] = useState([
-    {
-      id: 1,
-      code: "CS-402",
-      name: "Operating Systems",
-      year: "2024",
-      semester: "IV",
-      date: "May 24, 2024",
-      time: "09:00 - 12:00",
-      venue: "Main Hall A",
-      status: "Confirmed",
-    },
-    {
-      id: 2,
-      code: "CS-201",
-      name: "Data Structures",
-      year: "2026",
-      semester: "II",
-      date: "May 25, 2024",
-      time: "02:00 - 05:00",
-      venue: "Main Hall B",
-      status: "In Progress",
-    },
-    {
-      id: 3,
-      code: "PY-101",
-      name: "Applied Physics",
-      year: "2027",
-      semester: "I",
-      date: "May 26, 2024",
-      time: "09:00 - 12:00",
-      venue: "Seminar Room 302",
-      status: "Conflict",
-    },
-  ]);
+  const [exams, setExams] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
+  const fetchExams = async (params = {}) => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await getExams(params);
+      setExams(response.exams || []);
+    } catch (err) {
+      setError(err?.response?.data?.message || "Unable to load exams.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchExams();
+  }, []);
+
+  const handleSearch = (event) => {
+    event.preventDefault();
+    fetchExams({ search: searchTerm, status: statusFilter });
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this exam?")) return;
+
+    try {
+      await deleteExam(id);
+      setExams((prev) => prev.filter((exam) => exam._id !== id));
+    } catch (err) {
+      setError(err?.response?.data?.message || "Unable to delete exam.");
+    }
+  };
 
   const columns = [
-    { key: "code", label: "Course Code" },
-    { key: "name", label: "Exam Name" },
-    { key: "year", label: "Year" },
-    { key: "date", label: "Date" },
-    { key: "time", label: "Time" },
+    { key: "subjectCode", label: "Course Code" },
+    { key: "subjectName", label: "Exam Name" },
+    { key: "academicYear", label: "Year" },
+    {
+      key: "branch",
+      label: "Branch",
+      render: (row) => (Array.isArray(row.branch) ? row.branch.join(", ") : row.branch),
+    },
+    {
+      key: "examDate",
+      label: "Date",
+      render: (row) => (row.examDate ? new Date(row.examDate).toLocaleDateString() : ""),
+    },
+    { key: "startTime", label: "Start" },
+    { key: "endTime", label: "End" },
     {
       key: "status",
       label: "Status",
-      render: (row) => (
-        <span
-          className={`px-3 py-1 rounded-full text-xs font-semibold ${
-            row.status === "Confirmed"
-              ? "bg-success-100 text-success-700"
-              : row.status === "In Progress"
-              ? "bg-primary-100 text-primary-700"
-              : "bg-danger-100 text-danger-700"
-          }`}
-        >
-          {row.status}
-        </span>
-      ),
+      render: (row) => {
+        const status = row.status || "Scheduled";
+        const statusClasses =
+          status === "Scheduled"
+            ? "bg-primary-100 text-primary-700"
+            : status === "Ongoing"
+            ? "bg-success-100 text-success-700"
+            : status === "Completed"
+            ? "bg-slate-100 text-slate-700"
+            : status === "Cancelled"
+            ? "bg-danger-100 text-danger-700"
+            : "bg-warning-100 text-warning-700";
+
+        return (
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusClasses}`}>
+            {status}
+          </span>
+        );
+      },
     },
   ];
 
   const actions = [
     {
       label: "View",
-      onClick: (row) => navigate(`/admin/exams/${row.id}`),
+      onClick: (row) => navigate(`/admin/exams/${row._id}`),
     },
     {
       label: "Edit",
-      onClick: (row) => navigate(`/admin/exams/edit/${row.id}`),
+      onClick: (row) => navigate(`/admin/exams/edit/${row._id}`),
     },
     {
       label: "Delete",
       variant: "danger",
-      onClick: () => alert("Delete confirmed"),
+      onClick: (row) => handleDelete(row._id),
     },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Exam Management</h1>
-          <p className="text-gray-600 mt-1">Manage and schedule all exams</p>
+          <p className="text-gray-600 mt-1">Manage and schedule all exams.</p>
         </div>
         <Button onClick={() => navigate("/admin/exams/add")}>
           <Plus size={20} />
@@ -97,29 +118,44 @@ const ExamManagement = () => {
         </Button>
       </div>
 
-      {/* Filters */}
       <Card>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <form onSubmit={handleSearch} className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_240px] gap-4">
           <input
             type="text"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Search by course code or name..."
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
-          <select className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent">
-            <option>All Status</option>
-            <option>Confirmed</option>
-            <option>In Progress</option>
-            <option>Conflict</option>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value="">All Status</option>
+            <option value="Scheduled">Scheduled</option>
+            <option value="Ongoing">Ongoing</option>
+            <option value="Completed">Completed</option>
+            <option value="Cancelled">Cancelled</option>
+            <option value="Postponed">Postponed</option>
           </select>
-          <button className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-semibold transition">
-            Filter
+          <button
+            type="submit"
+            className="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-semibold transition"
+          >
+            Apply
           </button>
-        </div>
+        </form>
       </Card>
 
-      {/* Table */}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+          {error}
+        </div>
+      )}
+
       <Card>
-        <Table columns={columns} data={exams} actions={actions} />
+        <Table columns={columns} data={exams} actions={actions} loading={loading} />
       </Card>
     </div>
   );

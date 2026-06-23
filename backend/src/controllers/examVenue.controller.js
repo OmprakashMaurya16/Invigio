@@ -2,6 +2,29 @@ const ExamAllocation = require("../models/examAllocation.model.js");
 const Exam = require("../models/exam.model.js");
 const Venue = require("../models/venue.model.js");
 
+const getExamVenues = async (req, res) => {
+  try {
+    const allocations = await ExamAllocation.find()
+      .populate([
+        { path: "examId", select: "subjectCode subjectName examDate startTime endTime status" },
+        { path: "venueId", select: "block room" },
+      ])
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      total: allocations.length,
+      examVenues: allocations,
+    });
+  } catch (error) {
+    console.error("Get exam-venues error:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to fetch exam-venue allocations",
+    });
+  }
+};
+
 const createExamVenue = async (req, res) => {
   try {
     const { examId, venueId, requiredInvigilators } = req.body;
@@ -159,6 +182,7 @@ const deleteExamVenue = async (req, res) => {
 };
 
 module.exports = {
+  getExamVenues,
   createExamVenue,
   updateExamVenue,
   deleteExamVenue,

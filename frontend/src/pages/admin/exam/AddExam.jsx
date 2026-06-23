@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Card from "../../../components/Card";
 import Button from "../../../components/Button";
+import { createExam } from "../../../services/exam";
 
 const AddExam = () => {
   const navigate = useNavigate();
@@ -11,24 +12,71 @@ const AddExam = () => {
     name: "",
     year: "",
     semester: "",
+    branch: "",
     date: "",
     startTime: "",
     endTime: "",
-    venue: "",
     capacity: "",
     invigilators: "",
     description: "",
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    alert("Exam added successfully!");
-    navigate("/admin/exams");
+    setError("");
+
+    if (
+      !formData.code ||
+      !formData.name ||
+      !formData.year ||
+      !formData.semester ||
+      !formData.branch ||
+      !formData.date ||
+      !formData.startTime ||
+      !formData.endTime
+    ) {
+      setError("Please fill in all required fields.");
+      return;
+    }
+
+    const branchList = formData.branch
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (branchList.length === 0) {
+      setError("Please provide at least one branch.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await createExam({
+        subjectCode: formData.code,
+        subjectName: formData.name,
+        academicYear: formData.year,
+        semester: Number(formData.semester),
+        branch: branchList,
+        examDate: formData.date,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        status: "Scheduled",
+        description: formData.description,
+      });
+      navigate("/admin/exams");
+    } catch (err) {
+      setError(err?.response?.data?.message || "Unable to create exam.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -107,11 +155,11 @@ const AddExam = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   required
                 >
-                  <option>Select</option>
-                  <option>I</option>
-                  <option>II</option>
-                  <option>III</option>
-                  <option>IV</option>
+                  <option value="">Select</option>
+                  <option value="1">I</option>
+                  <option value="2">II</option>
+                  <option value="3">III</option>
+                  <option value="4">IV</option>
                 </select>
               </div>
             </div>

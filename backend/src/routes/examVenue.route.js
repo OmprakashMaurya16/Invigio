@@ -1,5 +1,6 @@
 const express = require("express");
 const {
+  getExamVenues,
   createExamVenue,
   updateExamVenue,
   deleteExamVenue,
@@ -13,6 +14,7 @@ const router = express.Router();
 
 router.use(protect, authorizeRoles("ADMIN"));
 
+router.get("/", getExamVenues);
 router.post("/", createExamVenue);
 router.patch("/:id", updateExamVenue);
 router.delete("/:id", deleteExamVenue);

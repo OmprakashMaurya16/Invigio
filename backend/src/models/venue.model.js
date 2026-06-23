@@ -4,15 +4,16 @@ const venueSchema = new mongoose.Schema(
   {
     block: {
       type: String,
-      require: [true, "Block or building name is required"],
-      toUpperCase: true,
+      required: [true, "Block or building name is required"],
+      trim: true,
+      uppercase: true,
     },
 
     room: {
       type: String,
-      require: [true, "Room number is required"],
+      required: [true, "Room number is required"],
       trim: true,
-      toUpperCase: true,
+      uppercase: true,
     },
   },
   { timestamps: true },
