@@ -5,28 +5,7 @@ import StatCard from "../../components/StatCard";
 import Button from "../../components/Button";
 
 const Reports = () => {
-  const reportStats = [
-    {
-      label: "Total Exams Conducted",
-      value: "142",
-      icon: BarChart3,
-    },
-    {
-      label: "Average Attendance",
-      value: "96.2%",
-      icon: BarChart3,
-    },
-    {
-      label: "Venues Used",
-      value: "45",
-      icon: BarChart3,
-    },
-    {
-      label: "Invigilators Deployed",
-      value: "87",
-      icon: BarChart3,
-    },
-  ];
+
 
   const reportTypes = [
     {
@@ -64,12 +43,7 @@ const Reports = () => {
         </Button>
       </div>
 
-      {/* Report Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {reportStats.map((stat, index) => (
-          <StatCard key={index} {...stat} />
-        ))}
-      </div>
+
 
       {/* Available Reports */}
       <div className="space-y-4">

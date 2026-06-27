@@ -16,9 +16,7 @@ const AddExam = () => {
     date: "",
     startTime: "",
     endTime: "",
-    capacity: "",
     invigilators: "",
-    description: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -40,7 +38,8 @@ const AddExam = () => {
       !formData.branch ||
       !formData.date ||
       !formData.startTime ||
-      !formData.endTime
+      !formData.endTime ||
+      !formData.invigilators
     ) {
       setError("Please fill in all required fields.");
       return;
@@ -68,8 +67,8 @@ const AddExam = () => {
         examDate: formData.date,
         startTime: formData.startTime,
         endTime: formData.endTime,
+        requiredInvigilators: Number(formData.invigilators),
         status: "Scheduled",
-        description: formData.description,
       });
       navigate("/admin/exams");
     } catch (err) {
@@ -93,6 +92,12 @@ const AddExam = () => {
           <p className="text-gray-600 mt-1">Create a new examination entry</p>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+          {error}
+        </div>
+      )}
 
       <Card>
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -166,7 +171,7 @@ const AddExam = () => {
           </div>
 
           {/* Schedule Information */}
-          <div className="border-b pb-6">
+          <div className="pb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Schedule Information
             </h3>
@@ -186,17 +191,18 @@ const AddExam = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Venue *
+                  Branches *
                 </label>
                 <input
                   type="text"
-                  name="venue"
-                  value={formData.venue}
+                  name="branch"
+                  value={formData.branch}
                   onChange={handleChange}
-                  placeholder="e.g., Main Hall A"
+                  placeholder="e.g., CSE, ECE"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   required
                 />
+                <p className="text-xs text-gray-500 mt-1">Separate multiple branches with commas.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -224,61 +230,26 @@ const AddExam = () => {
                   required
                 />
               </div>
-            </div>
-          </div>
-
-          {/* Additional Details */}
-          <div className="border-b pb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Additional Details
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Expected Capacity
-                </label>
-                <input
-                  type="number"
-                  name="capacity"
-                  value={formData.capacity}
-                  onChange={handleChange}
-                  placeholder="150"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Required Invigilators
+                  Invigilators Required *
                 </label>
                 <input
                   type="number"
                   name="invigilators"
                   value={formData.invigilators}
                   onChange={handleChange}
-                  placeholder="3"
+                  min="1"
+                  placeholder="e.g., 2"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  required
                 />
               </div>
             </div>
           </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              placeholder="Any additional notes..."
-              rows="4"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            ></textarea>
-          </div>
-
           {/* Actions */}
-          <div className="flex gap-4 pt-6 border-t">
+          <div className="flex gap-4 pt-6">
             <Button variant="secondary" onClick={() => navigate("/admin/exams")}>
               Cancel
             </Button>

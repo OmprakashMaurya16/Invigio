@@ -14,13 +14,13 @@ const {
 
 const router = express.Router();
 
-router.use(protect, authorizeRoles("ADMIN"));
+router.use(protect);
 
-router.post("/", createExam);
-router.get("/", getAllExams);
-router.get("/:id", getExamById);
-router.patch("/:id", updateExam);
-router.delete("/:id", deleteExam);
-router.patch("/:id/cancel", cancelExam);
+router.post("/", authorizeRoles("ADMIN"), createExam);
+router.get("/", authorizeRoles("ADMIN", "PROFESSOR"), getAllExams);
+router.get("/:id", authorizeRoles("ADMIN", "PROFESSOR"), getExamById);
+router.patch("/:id", authorizeRoles("ADMIN"), updateExam);
+router.delete("/:id", authorizeRoles("ADMIN"), deleteExam);
+router.patch("/:id/cancel", authorizeRoles("ADMIN"), cancelExam);
 
 module.exports = router;

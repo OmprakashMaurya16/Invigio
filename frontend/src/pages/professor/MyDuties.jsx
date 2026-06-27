@@ -56,7 +56,7 @@ const MyDuties = () => {
                 duty.status === "Confirmed"
                   ? "bg-success-100 text-success-700"
                   : "bg-warning-100 text-warning-700"
-              }`}>
+              } whitespace-nowrap `}>
                 {duty.status}
               </span>
             </div>
@@ -105,3 +105,4 @@ const MyDuties = () => {
 };
 
 export default MyDuties;
+

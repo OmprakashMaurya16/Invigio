@@ -1,39 +1,58 @@
-require("dotenv").config({ quiet: true });
+require("dotenv").config({ path: require("path").resolve(__dirname, "../../.env") });
 
-const connectDB = require("../config/db.js");
-const User = require("../models/user.model.js");
+const connectDB = require("../config/db");
+const User = require("../models/user.model");
 
-const ADMIN_USER = {
-  name: "Abhishek Wali",
-  email: "mauryaompraksh2005@gmail.com",
-  password: "Admin@1234",
-  role: "ADMIN",
-  phone: "9888888888",
-};
+const users = [
+  {
+    name: "Admin User",
+    email: "admin@invigio.com",
+    password: "Admin@1234",
+    role: "ADMIN",
+    phone: "9000000001",
+    department: "CMPN",
+    isActive: true,
+  },
+  {
+    name: "Prof. John Doe",
+    email: "john.doe@invigio.com",
+    password: "Prof@1234",
+    role: "PROFESSOR",
+    phone: "9000000002",
+    department: "INFT",
+    isActive: true,
+  },
+];
 
-const main = async () => {
+const seedUsers = async () => {
   await connectDB();
 
-  const existing = await User.findOne({ email: ADMIN_USER.email });
-  if (existing) {
-    console.log("Admin already exists:", existing.email);
-    process.exit(0);
+  for (const userData of users) {
+    try {
+      const existing = await User.findOne({ email: userData.email });
+
+      if (existing) {
+        console.log(`⚠️  User already exists: ${existing.email} (${existing.role})`);
+        continue;
+      }
+
+      const user = await User.create(userData);
+      const label = user.role === "ADMIN" ? "✅ Admin" : "🎓 Professor";
+      console.log(`${label} user created successfully!`);
+      console.log("────────────────────────────────────");
+      console.log(`   Name     : ${user.name}`);
+      console.log(`   Email    : ${user.email}`);
+      console.log(`   Role     : ${user.role}`);
+      console.log(`   Dept     : ${user.department}`);
+      console.log(`   Phone    : ${user.phone}`);
+      console.log(`   Password : ${userData.password}  (change after first login)`);
+      console.log("────────────────────────────────────");
+    } catch (err) {
+      console.error(`❌ Error creating user (${userData.email}):`, err.message);
+    }
   }
-
-  const admin = await User.create(ADMIN_USER);
-
-  console.log("Admin created successfully:");
-  console.log({
-    id: admin._id,
-    name: admin.name,
-    email: admin.email,
-    role: admin.role,
-  });
 
   process.exit(0);
 };
 
-main().catch((error) => {
-  console.error("Failed to create admin:", error.message);
-  process.exit(1);
-});
+seedUsers();

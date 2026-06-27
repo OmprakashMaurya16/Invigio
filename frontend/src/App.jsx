@@ -8,6 +8,7 @@ import ProfessorLayout from "./layouts/ProfessorLayout";
 
 // Auth Pages
 import Login from "./pages/Login";
+import SignUp from "./pages/SignUp";
 
 // Admin Pages
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -78,6 +79,7 @@ const App = () => {
       <Router>
         <Routes>
           <Route path="/" element={<Login onLogin={handleLogin} />} />
+          <Route path="/signup" element={<SignUp />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>

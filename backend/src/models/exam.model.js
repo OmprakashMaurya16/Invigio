@@ -54,6 +54,12 @@ const examSchema = new mongoose.Schema({
     trim: true,
   },
 
+  requiredInvigilators: {
+    type: Number,
+    required: [true, "Number of required invigilators is required"],
+    min: [1, "Must require at least 1 invigilator"],
+  },
+
   status: {
     type: String,
     required: true,

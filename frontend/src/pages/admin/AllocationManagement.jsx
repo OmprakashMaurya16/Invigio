@@ -44,7 +44,7 @@ const AllocationManagement = () => {
               : row.status === "In Progress"
               ? "bg-primary-100 text-primary-700"
               : "bg-warning-100 text-warning-700"
-          }`}
+          } whitespace-nowrap `}
         >
           {row.status}
         </span>
@@ -78,3 +78,4 @@ const AllocationManagement = () => {
 };
 
 export default AllocationManagement;
+

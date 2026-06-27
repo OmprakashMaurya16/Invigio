@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import Card from "../../../components/Card";
@@ -17,9 +17,7 @@ const EditExam = () => {
     date: "",
     startTime: "",
     endTime: "",
-    capacity: "",
     invigilators: "",
-    description: "",
   });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -43,9 +41,7 @@ const EditExam = () => {
           date: exam.examDate ? new Date(exam.examDate).toISOString().split("T")[0] : "",
           startTime: exam.startTime || "",
           endTime: exam.endTime || "",
-          capacity: exam.capacity || "",
-          invigilators: exam.invigilators || "",
-          description: exam.description || "",
+          invigilators: exam.requiredInvigilators ? String(exam.requiredInvigilators) : "",
         });
       } catch (err) {
         setError(err?.response?.data?.message || "Unable to load exam details.");
@@ -74,7 +70,8 @@ const EditExam = () => {
       !formData.branch ||
       !formData.date ||
       !formData.startTime ||
-      !formData.endTime
+      !formData.endTime ||
+      !formData.invigilators
     ) {
       setError("Please fill in all required fields.");
       return;
@@ -102,7 +99,7 @@ const EditExam = () => {
         examDate: formData.date,
         startTime: formData.startTime,
         endTime: formData.endTime,
-        description: formData.description,
+        requiredInvigilators: Number(formData.invigilators),
       });
       navigate("/admin/exams");
     } catch (err) {
@@ -202,7 +199,7 @@ const EditExam = () => {
             </div>
           </div>
 
-          <div className="border-b pb-6">
+          <div className="pb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Schedule Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -251,47 +248,23 @@ const EditExam = () => {
                   required
                 />
               </div>
-            </div>
-          </div>
-
-          <div className="border-b pb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Additional Details</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Expected Capacity</label>
-                <input
-                  type="number"
-                  name="capacity"
-                  value={formData.capacity}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Required Invigilators</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Invigilators Required *</label>
                 <input
                   type="number"
                   name="invigilators"
                   value={formData.invigilators}
                   onChange={handleChange}
+                  min="1"
+                  placeholder="e.g., 2"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  required
                 />
               </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows="4"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            ></textarea>
-          </div>
-
-          <div className="flex gap-4 pt-6 border-t">
+          <div className="flex gap-4 pt-6">
             <Button variant="secondary" onClick={() => navigate("/admin/exams")}>Cancel</Button>
             <Button type="submit" disabled={submitting}>{submitting ? "Updating..." : "Update Exam"}</Button>
           </div>
@@ -302,31 +275,4 @@ const EditExam = () => {
 };
 
 export default EditExam;
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows="4"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            ></textarea>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-4 pt-6 border-t">
-            <Button variant="secondary" onClick={() => navigate("/admin/exams")}>
-              Cancel
-            </Button>
-            <Button type="submit">Update Exam</Button>
-          </div>
-        </form>
-      </Card>
-    </div>
-  );
-};
 

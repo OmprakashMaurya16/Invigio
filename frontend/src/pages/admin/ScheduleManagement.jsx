@@ -45,7 +45,7 @@ const ScheduleManagement = () => {
                       <h4 className="font-semibold text-gray-900">{exam.exam}</h4>
                       <p className="text-sm text-gray-600 mt-1">{exam.venue}</p>
                     </div>
-                    <span className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-semibold">
+                    <span className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-semibold whitespace-nowrap">
                       {exam.time}
                     </span>
                   </div>
@@ -60,3 +60,4 @@ const ScheduleManagement = () => {
 };
 
 export default ScheduleManagement;
+

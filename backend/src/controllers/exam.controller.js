@@ -20,23 +20,25 @@ const createExam = async (req, res) => {
       examDate,
       startTime,
       endTime,
+      requiredInvigilators,
       status,
     } = req.body;
 
-    if (
-      !subjectCode ||
-      !subjectName ||
-      !academicYear ||
-      !semester ||
-      !branch ||
-      !examDate ||
-      !startTime ||
-      !endTime
-    ) {
+    const missingFields = [];
+    if (!subjectCode) missingFields.push("subjectCode");
+    if (!subjectName) missingFields.push("subjectName");
+    if (!academicYear) missingFields.push("academicYear");
+    if (!semester) missingFields.push("semester");
+    if (!branch) missingFields.push("branch");
+    if (!examDate) missingFields.push("examDate");
+    if (!startTime) missingFields.push("startTime");
+    if (!endTime) missingFields.push("endTime");
+    if (!requiredInvigilators) missingFields.push("requiredInvigilators");
+
+    if (missingFields.length > 0) {
       return res.status(400).json({
         success: false,
-        message:
-          "subjectCode, subjectName, academicYear, semester, branch, examDate, startTime and endTime are required",
+        message: `Missing or invalid fields: ${missingFields.join(", ")}`,
       });
     }
 
@@ -56,6 +58,7 @@ const createExam = async (req, res) => {
       examDate,
       startTime,
       endTime,
+      requiredInvigilators,
       status: status || "Scheduled",
     });
 
@@ -145,6 +148,7 @@ const updateExam = async (req, res) => {
       examDate,
       startTime,
       endTime,
+      requiredInvigilators,
       status,
     } = req.body;
 
@@ -189,6 +193,7 @@ const updateExam = async (req, res) => {
     if (examDate !== undefined) exam.examDate = examDate;
     if (startTime !== undefined) exam.startTime = startTime;
     if (endTime !== undefined) exam.endTime = endTime;
+    if (requiredInvigilators !== undefined) exam.requiredInvigilators = requiredInvigilators;
     if (status !== undefined) exam.status = status;
 
     await exam.save();

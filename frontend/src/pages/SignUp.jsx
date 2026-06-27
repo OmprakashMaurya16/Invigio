@@ -1,13 +1,13 @@
 import React, { useState } from "react";
-import { User, Lock, Facebook, Twitter, Linkedin, AppWindow } from "lucide-react";
-import { login as loginRequest, setAuthCredentials, mapRole } from "../services/auth";
+import { User, Lock, AppWindow, Mail } from "lucide-react";
 import { useNavigate, Link } from "react-router-dom";
 import libraryBg from "../assets/library-bg.png";
 
-const Login = ({ onLogin }) => {
+const SignUp = () => {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("Invigilator"); // Added for visual consistency
+  const [role, setRole] = useState("Invigilator");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -15,29 +15,20 @@ const Login = ({ onLogin }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!email || !password) {
-      setError("Please fill in all fields");
+    if (!name || !email || !password) {
+      setError("Please fill in all required fields.");
       return;
     }
 
     setError("");
     setLoading(true);
 
-    try {
-      const data = await loginRequest(email, password);
-      // We still use backend's mapped role for actual routing and auth
-      const mappedRole = mapRole(data.user.role);
-
-      setAuthCredentials({ token: data.token, user: data.user });
-      onLogin(mappedRole);
-      navigate(mappedRole === "admin" ? "/admin" : "/professor");
-    } catch (err) {
-      setError(
-        err?.response?.data?.message || "Unable to log in. Please check your credentials and try again.",
-      );
-    } finally {
+    // Mock signup process
+    setTimeout(() => {
       setLoading(false);
-    }
+      alert("Account created successfully! Please log in.");
+      navigate("/");
+    }, 1000);
   };
 
   return (
@@ -95,8 +86,8 @@ const Login = ({ onLogin }) => {
         {/* Form Container */}
         <div className="w-full max-w-md px-8 relative z-10">
           <div className="text-center mb-10">
-            <h2 className="text-3xl font-bold text-slate-900 mb-3 tracking-tight">Welcome</h2>
-            <p className="text-slate-500 text-sm">Log in to your account to continue</p>
+            <h2 className="text-3xl font-bold text-slate-900 mb-3 tracking-tight">Create an Account</h2>
+            <p className="text-slate-500 text-sm">Sign up to join the system</p>
           </div>
 
           {error && (
@@ -105,11 +96,11 @@ const Login = ({ onLogin }) => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6 text-left">
+          <form onSubmit={handleSubmit} className="space-y-5 text-left">
             
             {/* Role Field */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Role</label>
+              <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Select Role</label>
               <div className="relative">
                 <select 
                   value={role}
@@ -125,12 +116,29 @@ const Login = ({ onLogin }) => {
               </div>
             </div>
 
+            {/* Name Field */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Full Name</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-slate-400" />
+                </div>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 font-medium transition-all"
+                  placeholder="John Doe"
+                />
+              </div>
+            </div>
+
             {/* Email Field */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Email Address</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-400" />
+                  <Mail className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   type="email"
@@ -144,12 +152,7 @@ const Login = ({ onLogin }) => {
 
             {/* Password Field */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">Password</label>
-                <a href="#" className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors">
-                  Forgot password?
-                </a>
-              </div>
+              <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Password</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-slate-400" />
@@ -170,21 +173,21 @@ const Login = ({ onLogin }) => {
               disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl transition-colors shadow-lg shadow-blue-600/30 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
             >
-              {loading ? "Signing In..." : "Sign In"}
+              {loading ? "Creating Account..." : "Sign Up"}
             </button>
           </form>
 
-          {/* Sign Up Link */}
+          {/* Sign In Link */}
           <div className="mt-8 text-center">
             <p className="text-sm font-medium text-slate-500">
-              Don't have an account? <Link to="/signup" className="text-blue-600 font-bold hover:text-blue-700 transition-colors">Sign up!</Link>
+              Already have an account? <Link to="/" className="text-blue-600 font-bold hover:text-blue-700 transition-colors">Sign in!</Link>
             </p>
           </div>
 
           {/* Contact Support */}
           <div className="mt-12 text-center pt-8 border-t border-slate-100">
             <p className="text-xs font-medium text-slate-400">
-              Having trouble logging in? <a href="#" className="text-blue-600 font-bold hover:text-blue-700 transition-colors">Contact Support</a>
+              Need assistance? <a href="#" className="text-blue-600 font-bold hover:text-blue-700 transition-colors">Contact Support</a>
             </p>
           </div>
           
@@ -200,4 +203,4 @@ const Login = ({ onLogin }) => {
   );
 };
 
-export default Login;
+export default SignUp;

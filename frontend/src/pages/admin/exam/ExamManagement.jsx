@@ -81,7 +81,7 @@ const ExamManagement = () => {
             : "bg-warning-100 text-warning-700";
 
         return (
-          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusClasses}`}>
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusClasses} whitespace-nowrap `}>
             {status}
           </span>
         );
@@ -162,3 +162,4 @@ const ExamManagement = () => {
 };
 
 export default ExamManagement;
+

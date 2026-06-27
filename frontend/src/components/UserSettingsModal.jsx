@@ -5,7 +5,7 @@ const UserSettingsModal = ({ isOpen, onClose, userRole }) => {
   const [userInfo, setUserInfo] = useState({
     firstName: userRole === "admin" ? "Admin" : "Professor",
     lastName: "User",
-    email: userRole === "admin" ? "admin@uniexam.edu" : "prof@uniexam.edu",
+    email: userRole === "admin" ? "admin@invigio.com" : "prof@invigio.com",
     department: "Computer Science",
     phone: "+1 234 567 8900"
   });

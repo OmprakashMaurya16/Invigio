@@ -40,7 +40,7 @@ const InvigilatorManagement = () => {
           row.available === "Yes"
             ? "bg-success-100 text-success-700"
             : "bg-warning-100 text-warning-700"
-        }`}>
+        } whitespace-nowrap `}>
           {row.available}
         </span>
       ),
@@ -74,3 +74,4 @@ const InvigilatorManagement = () => {
 };
 
 export default InvigilatorManagement;
+

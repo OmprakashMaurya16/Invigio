@@ -39,7 +39,7 @@ const Navbar = ({ menuItems, onLogout, userRole = "admin" }) => {
             {/* Logo */}
             <div className="flex items-center gap-8">
               <Link to={userRole === "admin" ? "/admin" : "/professor"} className="flex items-center flex-shrink-0">
-                <div className="text-xl font-bold text-primary-700 tracking-tight">UniExam Ops</div>
+                <div className="text-xl font-bold text-primary-700 tracking-tight">Invigio</div>
               </Link>
 
               {/* Desktop Menu */}
@@ -80,7 +80,7 @@ const Navbar = ({ menuItems, onLogout, userRole = "admin" }) => {
                   <div className="px-4 py-3 border-b border-slate-100">
                     <p className="text-sm font-medium text-slate-900">{userRole === "admin" ? "Administrator" : "Professor"}</p>
                     <p className="text-xs text-slate-500 truncate mt-1">
-                      {userRole === "admin" ? "admin@uniexam.edu" : "prof@uniexam.edu"}
+                      {userRole === "admin" ? "admin@invigio.com" : "prof@invigio.com"}
                     </p>
                   </div>
                   <div className="py-2 border-b border-slate-100">
@@ -90,13 +90,6 @@ const Navbar = ({ menuItems, onLogout, userRole = "admin" }) => {
                     >
                       <Settings size={16} className="text-slate-500" />
                       Settings
-                    </button>
-                    <button
-                      onClick={() => alert("Help Center is currently offline.")}
-                      className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2"
-                    >
-                      <HelpCircle size={16} className="text-slate-500" />
-                      Help Center
                     </button>
                   </div>
                   <div className="py-1">

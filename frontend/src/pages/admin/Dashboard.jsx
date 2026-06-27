@@ -1,14 +1,15 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Calendar, ClipboardList, AlertTriangle, UserMinus, Upload, Zap, Plus, Eye, Filter, AlertCircle } from "lucide-react";
-import AddExamModal from "./exam/AddExamModal";
 
 const AdminDashboard = () => {
-  const [showAddExam, setShowAddExam] = useState(false);
+  const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState("All");
   const itemsPerPage = 5;
 
-  const upcomingExams = [
+  const initialExams = [
+    { id: 100, subject: "Advanced Macroeconomics", code: "ECON-402", yearBranch: "2024 / ECON", sem: "IV", date: "Oct 24, 2024", time: "09:00 AM", reqs: "1 / 1", alloc: "1 / 1", status: "PENDING" },
     { id: 1, subject: "Operating Systems", code: "CS-402", yearBranch: "2024 / CSE", sem: "IV", date: "May 12, 2024", time: "09:00 AM", reqs: "12 / 18", alloc: "12 / 18", status: "CONFIRMED" },
     { id: 2, subject: "Data Structures", code: "CS-201", yearBranch: "2026 / CSE", sem: "II", date: "May 12, 2024", time: "02:00 PM", reqs: "10 / 15", alloc: "8 / 15", status: "IN PROGRESS" },
     { id: 3, subject: "Applied Physics", code: "PY-101", yearBranch: "2027 / ALL", sem: "I", date: "May 13, 2024", time: "09:00 AM", reqs: "40 / 60", alloc: "0 / 0", status: "CONFLICT" },
@@ -23,7 +24,48 @@ const AdminDashboard = () => {
     { id: 12, subject: "Software Engineering", code: "CS-403", yearBranch: "2024 / CSE", sem: "IV", date: "May 18, 2024", time: "02:00 PM", reqs: "12 / 16", alloc: "12 / 16", status: "CONFIRMED" },
   ];
 
-  const totalPages = Math.ceil(upcomingExams.length / itemsPerPage);
+  const [upcomingExams, setUpcomingExams] = useState(() => {
+    const exams = [...initialExams];
+    if (localStorage.getItem("dutyConfirmed_ECON402") === "true") {
+      const econExam = exams.find(e => e.code === "ECON-402");
+      if (econExam) econExam.status = "CONFIRMED";
+    }
+    return exams;
+  });
+
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      // If the professor confirms duty in another tab, update the admin dashboard
+      if (e.key === "dutyConfirmed_ECON402" && e.newValue === "true") {
+        setUpcomingExams(prev => 
+          prev.map(exam => exam.code === "ECON-402" ? { ...exam, status: "CONFIRMED" } : exam)
+        );
+      }
+    };
+
+    // Note: The storage event only fires for changes made in *other* documents (tabs/windows)
+    window.addEventListener("storage", handleStorageChange);
+    
+    // Also periodically poll in case it changes in the same window (e.g. they switch routes without reloading)
+    const interval = setInterval(() => {
+      if (localStorage.getItem("dutyConfirmed_ECON402") === "true") {
+        setUpcomingExams(prev => 
+          prev.map(exam => exam.code === "ECON-402" && exam.status !== "CONFIRMED" ? { ...exam, status: "CONFIRMED" } : exam)
+        );
+      }
+    }, 1000);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const filteredExams = statusFilter === "All" 
+    ? upcomingExams 
+    : upcomingExams.filter(exam => exam.status === statusFilter);
+
+  const totalPages = Math.max(1, Math.ceil(filteredExams.length / itemsPerPage));
   
   const handlePreviousPage = () => {
     setCurrentPage((prev) => Math.max(1, prev - 1));
@@ -33,7 +75,7 @@ const AdminDashboard = () => {
     setCurrentPage((prev) => Math.min(totalPages, prev + 1));
   };
 
-  const paginatedExams = upcomingExams.slice(
+  const paginatedExams = filteredExams.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
@@ -62,7 +104,7 @@ const AdminDashboard = () => {
             Generate Allocation
           </button>
           <button 
-            onClick={() => setShowAddExam(true)}
+            onClick={() => navigate("/admin/exams/add")}
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md text-sm font-medium hover:bg-primary-700 transition-colors shadow-sm"
           >
             <Plus size={16} />
@@ -137,9 +179,27 @@ const AdminDashboard = () => {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
           <h2 className="text-lg font-semibold text-slate-900">Upcoming Exams</h2>
-          <button className="p-2 text-slate-500 border border-slate-200 rounded-md hover:bg-slate-50 transition">
-            <Filter size={18} />
-          </button>
+          <div className="relative">
+            <select 
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-9 pr-8 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-md appearance-none focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 bg-white cursor-pointer hover:bg-slate-50 transition shadow-sm"
+            >
+              <option value="All">All Statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="CONFIRMED">Confirmed</option>
+              <option value="IN PROGRESS">In Progress</option>
+              <option value="CONFLICT">Conflict</option>
+              <option value="DRAFT">Draft</option>
+            </select>
+            <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+          </div>
         </div>
         
         <div className="overflow-x-auto">
@@ -185,7 +245,7 @@ const AdminDashboard = () => {
                       exam.status === "IN PROGRESS" ? "bg-amber-100 text-amber-700" :
                       exam.status === "CONFLICT" ? "bg-red-100 text-red-700" :
                       "bg-slate-100 text-slate-700"
-                    }`}>
+                    } whitespace-nowrap `}>
                       {exam.status}
                     </span>
                   </td>
@@ -206,7 +266,7 @@ const AdminDashboard = () => {
         
         <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50">
           <p className="text-xs text-slate-500 font-medium">
-            Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, upcomingExams.length)} of {upcomingExams.length} exams
+            Showing {filteredExams.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, filteredExams.length)} of {filteredExams.length} exams
           </p>
           <div className="flex items-center gap-2">
             <button 
@@ -216,7 +276,7 @@ const AdminDashboard = () => {
                 currentPage === 1 
                   ? "bg-slate-100 text-slate-400 cursor-not-allowed" 
                   : "bg-white text-slate-600 hover:bg-slate-100"
-              }`}
+              } whitespace-nowrap `}
             >
               Previous
             </button>
@@ -227,7 +287,7 @@ const AdminDashboard = () => {
                 currentPage === totalPages 
                   ? "bg-primary-300 text-white cursor-not-allowed" 
                   : "bg-primary-600 text-white hover:bg-primary-700"
-              }`}
+              } whitespace-nowrap `}
             >
               Next
             </button>
@@ -243,11 +303,9 @@ const AdminDashboard = () => {
         <AlertCircle size={20} />
         {upcomingExams.filter(e => e.status === "CONFLICT").length} Active Conflicts
       </Link>
-
-      {/* Modals */}
-      <AddExamModal isOpen={showAddExam} onClose={() => setShowAddExam(false)} />
     </div>
   );
 };
 
 export default AdminDashboard;
+
