@@ -1,65 +1,50 @@
-import React, { useState } from "react";
-import { 
-  AlertTriangle, 
-  ClipboardList, 
-  DoorOpen, 
-  Info, 
-  CalendarX2, 
-  CheckCheck 
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ClipboardList,
+  DoorOpen,
+  Info,
+  CalendarX2,
+  CheckCheck,
 } from "lucide-react";
+import { getNotifications } from "../../services/notifications";
 
 const Notifications = () => {
   const [activeTab, setActiveTab] = useState("All");
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const tabs = ["All", "Assignments", "Room Changes", "Emergency"];
 
-  const notifications = [
-    {
-      id: 1,
-      type: "Emergency",
-      title: "Fire Alarm Testing - North Wing",
-      message: "Mandatory testing will commence at 14:00. Exams in halls N1-N5 will be paused.",
-      time: "Just now",
-      icon: AlertTriangle,
-      color: "red"
-    },
-    {
-      id: 2,
-      type: "Assignment",
-      title: "New Invigilation Duty Added",
-      message: "You have been assigned to 'Advanced Calculus (MATH301)' tomorrow at 09:00 in Hall A.",
-      time: "10 mins ago",
-      icon: ClipboardList,
-      color: "blue"
-    },
-    {
-      id: 3,
-      type: "Room Change",
-      title: "Venue Update: PHYS202",
-      message: "The venue for 'Quantum Mechanics' has been moved from Hall C to the Main Auditorium.",
-      time: "2 hours ago",
-      icon: DoorOpen,
-      color: "slate"
-    },
-    {
-      id: 4,
-      type: "System Info",
-      title: "System Maintenance Scheduled",
-      message: "ExamControl will be offline for routine maintenance on Sunday from 02:00 to 04:00 AM.",
-      time: "Yesterday",
-      icon: Info,
-      color: "slate"
-    },
-    {
-      id: 5,
-      type: "Conflict Alert",
-      title: "Schedule Overlap Detected",
-      message: "Dr. Smith is double-booked for invigilation on Thursday at 14:00. Action required.",
-      time: "Yesterday",
-      icon: CalendarX2,
-      color: "slate"
-    }
-  ];
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        setLoading(true);
+        const response = await getNotifications();
+        setNotifications(response.notifications || []);
+      } catch (err) {
+        setError(err?.response?.data?.message || "Unable to load notifications.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchNotifications();
+  }, []);
+
+  const visibleNotifications = useMemo(() => {
+    const normalized = activeTab.toLowerCase();
+    if (normalized === "all") return notifications;
+
+    return notifications.filter((notif) => {
+      const type = notif.type?.toLowerCase() || "";
+      if (normalized === "assignments") return type.includes("assignment") || type.includes("duty") || type.includes("reminder");
+      if (normalized === "room changes") return type.includes("room") || type.includes("venue") || type.includes("update");
+      if (normalized === "emergency") return type.includes("alert") || type.includes("emergency") || type.includes("conflict");
+      return true;
+    });
+  }, [activeTab, notifications]);
 
   return (
     <div className="space-y-6 pb-20 mt-6 max-w-5xl mx-auto">
@@ -94,43 +79,65 @@ const Notifications = () => {
       </div>
 
       {/* Notifications List */}
-      <div className="space-y-4">
-        {notifications.map((notif) => (
-          <div 
-            key={notif.id}
-            className={`bg-white border rounded-lg p-5 flex gap-4 transition-colors hover:bg-slate-50 cursor-pointer ${
-              notif.color === "red" ? "border-l-4 border-l-red-500 border-red-100" :
-              notif.color === "blue" ? "border-l-4 border-l-slate-300 border-slate-200" :
-              "border-l-4 border-l-slate-400 border-slate-200"
-            }`}
-          >
-            {/* Icon */}
-            <div className={`p-3 rounded-lg flex-shrink-0 h-min ${
-              notif.color === "red" ? "bg-red-100 text-red-600" :
-              notif.color === "blue" ? "bg-primary-50 text-primary-600" :
-              "bg-slate-100 text-slate-500"
-            }`}>
-              <notif.icon size={24} />
-            </div>
+      {loading ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">Loading notifications...</div>
+      ) : error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-sm text-red-700">{error}</div>
+      ) : (
+        <div className="space-y-4">
+          {visibleNotifications.map((notif) => {
+            const Icon = notif.type?.toLowerCase().includes("alert") || notif.type?.toLowerCase().includes("conflict")
+              ? AlertTriangle
+              : notif.type?.toLowerCase().includes("assignment") || notif.type?.toLowerCase().includes("duty")
+              ? ClipboardList
+              : notif.type?.toLowerCase().includes("venue") || notif.type?.toLowerCase().includes("update")
+              ? DoorOpen
+              : Info;
 
-            {/* Content */}
-            <div className="flex-1">
-              <div className="flex justify-between items-start mb-1">
-                <span className={`text-[11px] font-bold uppercase tracking-wider ${
-                  notif.color === "red" ? "text-red-600" :
-                  notif.color === "blue" ? "text-slate-500" :
-                  "text-slate-500"
+            const color = notif.type?.toLowerCase().includes("alert") || notif.type?.toLowerCase().includes("conflict")
+              ? "red"
+              : notif.type?.toLowerCase().includes("assignment") || notif.type?.toLowerCase().includes("duty")
+              ? "blue"
+              : "slate";
+
+            return (
+              <div
+                key={notif.id}
+                className={`bg-white border rounded-lg p-5 flex gap-4 transition-colors hover:bg-slate-50 ${
+                  color === "red"
+                    ? "border-l-4 border-l-red-500 border-red-100"
+                    : color === "blue"
+                    ? "border-l-4 border-l-slate-300 border-slate-200"
+                    : "border-l-4 border-l-slate-400 border-slate-200"
+                }`}
+              >
+                <div className={`p-3 rounded-lg flex-shrink-0 h-min ${
+                  color === "red"
+                    ? "bg-red-100 text-red-600"
+                    : color === "blue"
+                    ? "bg-primary-50 text-primary-600"
+                    : "bg-slate-100 text-slate-500"
                 }`}>
-                  {notif.type}
-                </span>
-                <span className="text-xs text-slate-500">{notif.time}</span>
+                  <Icon size={24} />
+                </div>
+
+                <div className="flex-1">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className={`text-[11px] font-bold uppercase tracking-wider ${
+                      color === "red" ? "text-red-600" : "text-slate-500"
+                    }`}>
+                      {notif.type}
+                    </span>
+                    <span className="text-xs text-slate-500">{notif.time}</span>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 mb-1">{notif.title}</h3>
+                  <p className="text-sm text-slate-600 leading-relaxed">{notif.message}</p>
+                </div>
               </div>
-              <h3 className="text-base font-bold text-slate-900 mb-1">{notif.title}</h3>
-              <p className="text-sm text-slate-600 leading-relaxed">{notif.message}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Load More Button */}
       <div className="flex justify-center mt-8 pt-4">

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import Card from "../../../components/Card";
 import Table from "../../../components/Table";
 import Button from "../../../components/Button";
-import { getExams, deleteExam } from "../../../services/exam";
+import { getExams, deleteExam, cancelExam } from "../../../services/exam";
 
 const ExamManagement = () => {
   const navigate = useNavigate();
@@ -45,6 +45,19 @@ const ExamManagement = () => {
       setExams((prev) => prev.filter((exam) => exam._id !== id));
     } catch (err) {
       setError(err?.response?.data?.message || "Unable to delete exam.");
+    }
+  };
+
+  const handleCancel = async (id) => {
+    if (!window.confirm("Cancel this exam?")) return;
+
+    try {
+      const response = await cancelExam(id);
+      setExams((prev) =>
+        prev.map((exam) => (exam._id === id ? { ...exam, status: response.exam?.status || "Cancelled" } : exam)),
+      );
+    } catch (err) {
+      setError(err?.response?.data?.message || "Unable to cancel exam.");
     }
   };
 
@@ -97,6 +110,10 @@ const ExamManagement = () => {
     {
       label: "Edit",
       onClick: (row) => navigate(`/admin/exams/edit/${row._id}`),
+    },
+    {
+      label: "Cancel",
+      onClick: (row) => handleCancel(row._id),
     },
     {
       label: "Delete",

@@ -1,56 +1,41 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Bell, Trash2 } from "lucide-react";
 import Card from "../../components/Card";
+import { getNotifications } from "../../services/notifications";
 
 const Notifications = () => {
-  const notifications = [
-    {
-      id: 1,
-      type: "assignment",
-      title: "New Invigilator Duty Assigned",
-      message: "You have been assigned to 'Advanced Macroeconomics (ECON-402)' on Oct 24, 2024.",
-      time: "2 hours ago",
-    },
-    {
-      id: 2,
-      type: "reminder",
-      title: "Duty Reminder",
-      message: "Don't forget: Advanced Macroeconomics exam tomorrow at 09:00 in Main Hall A.",
-      time: "1 day ago",
-    },
-    {
-      id: 3,
-      type: "conflict",
-      title: "Schedule Conflict Detected",
-      message: "You have overlapping duties. Please review your conflict report.",
-      time: "2 days ago",
-    },
-    {
-      id: 4,
-      type: "update",
-      title: "Schedule Updated",
-      message: "The venue for Business Ethics has been changed to Auditorium 1.",
-      time: "3 days ago",
-    },
-    {
-      id: 5,
-      type: "system",
-      title: "System Maintenance Notice",
-      message: "ExamControl will be offline for maintenance on Sunday 02:00 - 04:00 AM.",
-      time: "1 week ago",
-    },
-  ];
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        setLoading(true);
+        const response = await getNotifications();
+        setNotifications(response.notifications || []);
+      } catch (err) {
+        setError(err?.response?.data?.message || "Unable to load notifications.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchNotifications();
+  }, []);
 
   const getTypeColor = (type) => {
-    switch (type) {
+    switch (type?.toLowerCase()) {
       case "assignment":
         return "bg-primary-50 border-primary-200 text-primary-900";
       case "reminder":
         return "bg-warning-50 border-warning-200 text-warning-900";
+      case "conflict alert":
       case "conflict":
         return "bg-danger-50 border-danger-200 text-danger-900";
+      case "system info":
       case "update":
-        return "bg-primary-50 border-primary-200 text-primary-900";
+        return "bg-gray-50 border-gray-200 text-gray-900";
       default:
         return "bg-gray-50 border-gray-200 text-gray-900";
     }
@@ -63,7 +48,13 @@ const Notifications = () => {
         <p className="text-gray-600 mt-1">Stay updated with your duties and system alerts</p>
       </div>
 
-      {notifications.map((notification) => (
+      {loading ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">Loading notifications...</div>
+      ) : error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+      ) : notifications.length === 0 ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">No notifications yet.</div>
+      ) : notifications.map((notification) => (
         <Card key={notification.id} className={`border ${getTypeColor(notification.type)}`}>
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-4">

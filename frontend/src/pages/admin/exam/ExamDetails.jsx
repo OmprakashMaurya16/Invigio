@@ -3,13 +3,14 @@ import { GraduationCap, Calendar, Clock, ArrowLeft, Info } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import Card from "../../../components/Card";
 import Button from "../../../components/Button";
-import { getExam } from "../../../services/exam";
+import { cancelExam, getExam } from "../../../services/exam";
 
 const ExamDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [exam, setExam] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -37,6 +38,22 @@ const ExamDetails = () => {
       day: "numeric",
       year: "numeric",
     });
+  };
+
+  const handleCancel = async () => {
+    if (!window.confirm("Cancel this exam?")) return;
+
+    setSubmitting(true);
+    setError("");
+
+    try {
+      const response = await cancelExam(id);
+      setExam((prev) => prev ? { ...prev, status: response.exam?.status || "Cancelled" } : prev);
+    } catch (err) {
+      setError(err?.response?.data?.message || "Unable to cancel exam.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -90,6 +107,11 @@ const ExamDetails = () => {
         <div className="flex items-center gap-3">
           <Button variant="secondary" onClick={() => navigate("/admin/exams")}>Back</Button>
           <Button onClick={() => navigate(`/admin/exams/edit/${id}`)}>Edit Exam</Button>
+          {(exam?.status !== "Cancelled" && exam?.status !== "Completed") && (
+            <Button variant="secondary" onClick={handleCancel} disabled={submitting}>
+              {submitting ? "Cancelling..." : "Cancel Exam"}
+            </Button>
+          )}
         </div>
       </div>
 

@@ -19,12 +19,20 @@ const facultyRoutes = require("./routes/faculty.route.js");
 const venueRoutes = require("./routes/venue.route.js");
 const examRoutes = require("./routes/exam.route.js");
 const examVenueRoutes = require("./routes/examVenue.route.js");
+const cancellationRequestRoutes = require("./routes/cancellationRequest.route.js");
+const notificationRoutes = require("./routes/notification.route.js");
+const reportRoutes = require("./routes/report.route.js");
+const attendanceRoutes = require("./routes/attendance.route.js");
 
 app.use("/api/user", authRoutes);
 app.use("/api/faculty", facultyRoutes);
 app.use("/api/venues", venueRoutes);
 app.use("/api/exams", examRoutes);
 app.use("/api/exam-venues", examVenueRoutes);
+app.use("/api/cancellation-requests", cancellationRequestRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/reports", reportRoutes);
+app.use("/api/attendance", attendanceRoutes);
 
 app.get("/", (req, res) => {
   res.status(200).json({

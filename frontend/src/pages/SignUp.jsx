@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { User, Lock, AppWindow, Mail } from "lucide-react";
 import { useNavigate, Link } from "react-router-dom";
 import libraryBg from "../assets/library-bg.png";
+import { register } from "../services/auth";
 
 const SignUp = () => {
   const [name, setName] = useState("");
@@ -9,6 +10,7 @@ const SignUp = () => {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("Invigilator");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -17,18 +19,28 @@ const SignUp = () => {
 
     if (!name || !email || !password) {
       setError("Please fill in all required fields.");
+      setSuccess("");
       return;
     }
 
     setError("");
+    setSuccess("");
     setLoading(true);
 
-    // Mock signup process
-    setTimeout(() => {
+    try {
+      const response = await register({ name, email, password, role });
+      setSuccess(response.message || "Account created successfully. Please log in.");
+      setName("");
+      setEmail("");
+      setPassword("");
+      setRole("Invigilator");
+
+      setTimeout(() => navigate("/"), 1000);
+    } catch (err) {
+      setError(err?.response?.data?.message || "Unable to create account.");
+    } finally {
       setLoading(false);
-      alert("Account created successfully! Please log in.");
-      navigate("/");
-    }, 1000);
+    }
   };
 
   return (
@@ -93,6 +105,12 @@ const SignUp = () => {
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-sm text-center font-medium">
               {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl mb-6 text-sm text-center font-medium">
+              {success}
             </div>
           )}
 

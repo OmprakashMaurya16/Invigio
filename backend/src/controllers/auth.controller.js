@@ -10,6 +10,85 @@ const generateOTP = () => {
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
 
+const generateUniquePhone = async () => {
+  let phone;
+  let existingUser;
+
+  do {
+    phone = `9${Math.floor(100000000 + Math.random() * 900000000)}`;
+    existingUser = await User.findOne({ phone });
+  } while (existingUser);
+
+  return phone;
+};
+
+const register = async (req, res) => {
+  try {
+    const { name, email, password, role, phone, department } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Name, email and password are required",
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters long",
+      });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please enter a valid email",
+      });
+    }
+
+    const normalizedRole = role === "Administrator" || role === "ADMIN"
+      ? "ADMIN"
+      : "PROFESSOR";
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: "An account with this email already exists",
+      });
+    }
+
+    const normalizedPhone = phone || (await generateUniquePhone());
+    const user = await User.create({
+      name,
+      email,
+      password,
+      role: normalizedRole,
+      phone: normalizedPhone,
+      department: department || undefined,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Account created successfully. Please log in.",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error("Register error:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to create account",
+    });
+  }
+};
+
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -194,6 +273,55 @@ const verifyOTP = async (req, res) => {
   }
 };
 
+const getMyAvailability = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    return res.status(200).json({
+      success: true,
+      availability: user.availability || {},
+    });
+  } catch (error) {
+    console.error("Get availability error:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to fetch availability",
+    });
+  }
+};
+
+const updateMyAvailability = async (req, res) => {
+  try {
+    const { overall, startDate, endDate, morningOnly, afternoonOnly, weekendOnly, unavailableDates } = req.body;
+
+    const user = await User.findById(req.user._id);
+
+    user.availability = {
+      overall: overall || "Available for Duty",
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
+      morningOnly: Boolean(morningOnly),
+      afternoonOnly: Boolean(afternoonOnly),
+      weekendOnly: Boolean(weekendOnly),
+      unavailableDates: (unavailableDates || []).map((date) => new Date(date)),
+    };
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Availability updated successfully",
+      availability: user.availability,
+    });
+  } catch (error) {
+    console.error("Update availability error:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to update availability",
+    });
+  }
+};
+
 const resetPassword = async (req, res) => {
   try {
     const { email, newPassword, confirmPassword } = req.body;
@@ -274,8 +402,11 @@ const resetPassword = async (req, res) => {
 };
 
 module.exports = {
+  register,
   login,
   forgotPassword,
   verifyOTP,
+  getMyAvailability,
+  updateMyAvailability,
   resetPassword,
 };

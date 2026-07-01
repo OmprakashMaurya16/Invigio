@@ -10,6 +10,7 @@ const ProfessorDashboard = () => {
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [modalInitialDate, setModalInitialDate] = useState(null);
   const [openExams, setOpenExams] = useState([]);
+  const [selectedExam, setSelectedExam] = useState(null);
   
   const [dutyConfirmed, setDutyConfirmed] = useState(() => {
     return localStorage.getItem("dutyConfirmed_ECON402") === "true";
@@ -136,8 +137,11 @@ const ProfessorDashboard = () => {
                 <AlertTriangle size={16} />
                 Report Issue
               </button>
-              <button 
-                onClick={() => setShowCancellation(true)}
+              <button
+                onClick={() => {
+                  setSelectedExam(openExams[0] || null);
+                  setShowCancellation(true);
+                }}
                 className="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors"
               >
                 <XCircle size={16} />
@@ -316,9 +320,10 @@ const ProfessorDashboard = () => {
       </footer>
       
       {/* Modals */}
-      <RequestCancellationModal 
-        isOpen={showCancellation} 
-        onClose={() => setShowCancellation(false)} 
+      <RequestCancellationModal
+        isOpen={showCancellation}
+        onClose={() => setShowCancellation(false)}
+        exam={selectedExam}
       />
       <AvailabilityModal
         isOpen={showAvailabilityModal}

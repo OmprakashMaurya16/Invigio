@@ -47,6 +47,37 @@ const userSchema = new mongoose.Schema(
       default: 8,
     },
 
+    availability: {
+      overall: {
+        type: String,
+        default: "Available for Duty",
+      },
+      startDate: {
+        type: Date,
+        default: null,
+      },
+      endDate: {
+        type: Date,
+        default: null,
+      },
+      morningOnly: {
+        type: Boolean,
+        default: false,
+      },
+      afternoonOnly: {
+        type: Boolean,
+        default: false,
+      },
+      weekendOnly: {
+        type: Boolean,
+        default: false,
+      },
+      unavailableDates: {
+        type: [Date],
+        default: [],
+      },
+    },
+
     isActive: {
       type: Boolean,
       default: true,

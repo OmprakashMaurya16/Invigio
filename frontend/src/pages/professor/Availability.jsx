@@ -1,21 +1,22 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Save } from "lucide-react";
 import Card from "../../components/Card";
 import Button from "../../components/Button";
+import { getMyAvailability, updateMyAvailability } from "../../services/auth";
 
 const Availability = () => {
   const [availability, setAvailability] = useState({
     overall: "Available for Duty",
-    startDate: "2024-10-01",
-    endDate: "2024-12-31",
+    startDate: "",
+    endDate: "",
     morningOnly: false,
     afternoonOnly: false,
     weekendOnly: false,
   });
-
-  const [selectedDates, setSelectedDates] = useState({
-    unavailable: [],
-  });
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const handleChange = (e) => {
     const { name, type, checked, value } = e.target;
@@ -25,8 +26,53 @@ const Availability = () => {
     }));
   };
 
-  const handleSave = () => {
-    alert("Availability updated successfully!");
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        const response = await getMyAvailability();
+        const currentAvailability = response.availability || {};
+        setAvailability({
+          overall: currentAvailability.overall || "Available for Duty",
+          startDate: currentAvailability.startDate ? new Date(currentAvailability.startDate).toISOString().slice(0, 10) : "",
+          endDate: currentAvailability.endDate ? new Date(currentAvailability.endDate).toISOString().slice(0, 10) : "",
+          morningOnly: Boolean(currentAvailability.morningOnly),
+          afternoonOnly: Boolean(currentAvailability.afternoonOnly),
+          weekendOnly: Boolean(currentAvailability.weekendOnly),
+        });
+      } catch (err) {
+        setError(err?.response?.data?.message || "Unable to load availability.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAvailability();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await updateMyAvailability({
+        overall: availability.overall,
+        startDate: availability.startDate || null,
+        endDate: availability.endDate || null,
+        morningOnly: availability.morningOnly,
+        afternoonOnly: availability.afternoonOnly,
+        weekendOnly: availability.weekendOnly,
+      });
+
+      setSuccess(response.message || "Availability updated successfully!");
+    } catch (err) {
+      setError(err?.response?.data?.message || "Unable to update availability.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -37,6 +83,18 @@ const Availability = () => {
       </div>
 
       {/* Current Status */}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {success}
+        </div>
+      )}
+
       <Card title="Current Availability Status">
         <div className="flex items-center justify-between p-4 bg-success-50 rounded-lg border border-success-200">
           <div>
@@ -133,11 +191,11 @@ const Availability = () => {
 
           {/* Save Button */}
           <div className="flex gap-3 pt-6 border-t">
-            <Button onClick={handleSave}>
+            <Button onClick={handleSave} disabled={saving || loading}>
               <Save size={20} />
-              Save Availability
+              {saving ? "Saving..." : "Save Availability"}
             </Button>
-            <Button variant="secondary">
+            <Button variant="secondary" disabled={saving || loading}>
               Cancel
             </Button>
           </div>
@@ -147,14 +205,15 @@ const Availability = () => {
       {/* Availability History */}
       <Card title="Recent Updates">
         <div className="space-y-3">
-          {[
-            "Oct 15, 2024 - Marked unavailable: Oct 20, 21",
-            "Oct 01, 2024 - Set availability: Oct 1 - Dec 31, 2024",
-          ].map((update, index) => (
-            <div key={index} className="p-3 bg-gray-50 rounded text-sm text-gray-700">
-              {update}
+          {loading ? (
+            <div className="p-3 rounded bg-gray-50 text-sm text-gray-700">Loading availability...</div>
+          ) : (
+            <div className="p-3 rounded bg-gray-50 text-sm text-gray-700">
+              {availability.startDate || availability.endDate
+                ? `Saved availability from ${availability.startDate || "--"} to ${availability.endDate || "--"}.`
+                : "No availability window saved yet."}
             </div>
-          ))}
+          )}
         </div>
       </Card>
     </div>

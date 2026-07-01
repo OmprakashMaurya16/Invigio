@@ -3,8 +3,23 @@ import api from "./api";
 const TOKEN_KEY = "invigio_token";
 const USER_KEY = "invigio_user";
 
+export const register = async (payload) => {
+  const response = await api.post("/api/user/register", payload);
+  return response.data;
+};
+
 export const login = async (email, password) => {
   const response = await api.post("/api/user/login", { email, password });
+  return response.data;
+};
+
+export const getMyAvailability = async () => {
+  const response = await api.get("/api/user/me/availability");
+  return response.data;
+};
+
+export const updateMyAvailability = async (payload) => {
+  const response = await api.patch("/api/user/me/availability", payload);
   return response.data;
 };
 
