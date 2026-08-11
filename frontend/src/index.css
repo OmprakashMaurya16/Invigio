@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  @apply box-border;
+}
+
+html {
+  @apply scroll-smooth;
+}
+
+body {
+  @apply bg-background text-on-surface font-sans;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+/* Typography scale defaults */
+h1 {
+  @apply text-display-lg font-semibold;
+}
+
+h2 {
+  @apply text-headline-md font-semibold;
+}
+
+h3 {
+  @apply text-headline-sm font-semibold;
+}
+
+p {
+  @apply text-body-md;
+}
+
+/* Subtle scrollbar - institutional style */
+::-webkit-scrollbar {
+  @apply w-2 h-2;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-slate-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded hover:bg-slate-400 transition-colors;
+}
+
+/* Focus ring style for accessibility */
+:focus-visible {
+  @apply outline-none ring-2 ring-offset-2 ring-primary-600;
+}
+
+input:focus-visible,
+button:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  @apply outline-none ring-2 ring-offset-2 ring-primary-600;
+}
+
+/* Form inputs - institutional style */
+input,
+select,
+textarea {
+  @apply border border-slate-200 rounded-md bg-white text-on-surface placeholder-on-surface-variant transition-colors;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  @apply border-primary-600 ring-2 ring-primary-600 ring-opacity-10;
+}
+
+/* Utility - divider */
+.divider {
+  @apply border-t border-slate-200;
+}
