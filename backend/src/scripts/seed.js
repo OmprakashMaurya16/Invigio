@@ -1,5 +1,7 @@
+const path = require("path");
+
 require("dotenv").config({
-  path: require("path").resolve(__dirname, "../../.env"),
+  path: path.resolve(__dirname, "../../../.env"),
 });
 
 const mongoose = require("mongoose");
@@ -53,18 +55,29 @@ const users = [
 
 const seedDemoUsers = async () => {
   await connectDB();
+
   let created = 0;
 
   for (const userData of users) {
-    const existingUser = await User.findOne({ email: userData.email });
+    const existingUser = await User.findOne({
+      email: userData.email,
+    });
+
     if (existingUser) {
       console.log(`Skipped existing user: ${userData.email}`);
       continue;
     }
 
-    await User.create({ ...userData, isActive: true });
+    await User.create({
+      ...userData,
+      isActive: true,
+    });
+
     created += 1;
-    console.log(`Created ${userData.role.toLowerCase()}: ${userData.email}`);
+
+    console.log(
+      `Created ${userData.role.toLowerCase()}: ${userData.email}`,
+    );
   }
 
   console.log(`Finished. ${created} user(s) created.`);

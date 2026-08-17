@@ -31,9 +31,7 @@ const examSchema = new mongoose.Schema(
       type: [String],
       required: [true, "At least one branch is required"],
       validate: {
-        validator: function (v) {
-          return Array.isArray(v) && v.length > 0;
-        },
+        validator: (v) => Array.isArray(v) && v.length > 0,
         message: "You must specify at least one branch.",
       },
     },
@@ -55,15 +53,8 @@ const examSchema = new mongoose.Schema(
       trim: true,
     },
 
-    requiredInvigilators: {
-      type: Number,
-      required: [true, "Number of required invigilators is required"],
-      min: [1, "Must require at least 1 invigilator"],
-    },
-
     status: {
       type: String,
-      required: true,
       enum: [
         "Draft",
         "Scheduled",
@@ -75,9 +66,7 @@ const examSchema = new mongoose.Schema(
       default: "Scheduled",
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
-const Exam = mongoose.model("Exam", examSchema);
-
-module.exports = Exam;
+module.exports = mongoose.model("Exam", examSchema);
