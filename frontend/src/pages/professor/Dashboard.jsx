@@ -3,28 +3,27 @@ import { Link } from "react-router-dom";
 import { Calendar, CheckCircle2, AlertTriangle, XCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import RequestCancellationModal from "./RequestCancellationModal";
 import AvailabilityModal from "./AvailabilityModal";
-import { getExams } from "../../services/exam";
+import { getExams, volunteerForExam } from "../../services/exam";
+import { getMyDuties } from "../../services/duty";
 
 const ProfessorDashboard = () => {
   const [showCancellation, setShowCancellation] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [modalInitialDate, setModalInitialDate] = useState(null);
   const [openExams, setOpenExams] = useState([]);
+  const [requestedExams, setRequestedExams] = useState(new Set());
   
   const [dutyConfirmed, setDutyConfirmed] = useState(() => {
     return localStorage.getItem("dutyConfirmed_ECON402") === "true";
   });
 
-  const handleConfirmDuty = () => {
-    setDutyConfirmed(true);
-    localStorage.setItem("dutyConfirmed_ECON402", "true");
-  };
+  const [duties, setDuties] = useState([]);
   
   // Selected dates (e.g., availability marked)
   const [selectedDates, setSelectedDates] = useState([28]); 
   
-  // Confirmed duty dates (e.g., Oct 24th)
-  const confirmedDates = dutyConfirmed ? [24] : [];
+  // Confirmed duty dates (dynamic from fetched duties)
+  const [currentDateState, setCurrentDateState] = useState(new Date());
 
   const handleDateClick = (day) => {
     setModalInitialDate(day);
@@ -40,18 +39,36 @@ const ProfessorDashboard = () => {
         console.error("Failed to fetch open exams:", error);
       }
     };
+    const fetchDuties = async () => {
+      try {
+        const data = await getMyDuties();
+        setDuties(data.duties || []);
+      } catch (error) {
+        console.error("Failed to fetch duties:", error);
+      }
+    };
     fetchOpenExams();
+    fetchDuties();
   }, []);
 
-  const currentDate = new Date();
-  const currentMonthName = currentDate.toLocaleString('default', { month: 'long' });
-  const currentYear = currentDate.getFullYear();
+  const handleVolunteer = async (exam) => {
+    try {
+      await volunteerForExam(exam._id);
+      setRequestedExams(prev => new Set(prev).add(exam._id));
+      alert(`Successfully volunteered for ${exam.subjectName} duty!`);
+    } catch (error) {
+      alert(error.response?.data?.message || "Unable to volunteer");
+    }
+  };
+
+  const currentMonthName = currentDateState.toLocaleString('default', { month: 'long' });
+  const currentYear = currentDateState.getFullYear();
   
   // Calculate days for the calendar grid
   const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
   
-  const currentMonth = currentDate.getMonth();
+  const currentMonth = currentDateState.getMonth();
   const daysInCurrentMonth = getDaysInMonth(currentYear, currentMonth);
   const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
   
@@ -73,6 +90,35 @@ const ProfessorDashboard = () => {
     nextMonthDays.push(i);
   }
 
+  // Navigation handlers
+  const handlePrevMonth = () => {
+    setCurrentDateState(new Date(currentYear, currentMonth - 1, 1));
+  };
+  const handleNextMonth = () => {
+    setCurrentDateState(new Date(currentYear, currentMonth + 1, 1));
+  };
+
+  // Determine volunteer dates for current viewed month
+  const volunteerDates = openExams
+    .filter(exam => {
+      const d = new Date(exam.examDate);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    })
+    .map(exam => new Date(exam.examDate).getDate());
+
+  // Determine today's date for highlighting
+  const today = new Date();
+  const isCurrentMonthViewed = today.getMonth() === currentMonth && today.getFullYear() === currentYear;
+  const todayDate = today.getDate();
+
+  const confirmedDates = duties
+    .filter(duty => {
+      if (duty.status !== "Accepted" || !duty.examId?.examDate) return false;
+      const d = new Date(duty.examId.examDate);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    })
+    .map(duty => new Date(duty.examId.examDate).getDate());
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-10 min-h-[calc(100vh-4rem)] flex flex-col">
       {/* Header */}
@@ -85,64 +131,72 @@ const ProfessorDashboard = () => {
         {/* Left Column */}
         <div className="lg:col-span-7 space-y-6">
           
-          {/* Upcoming Duty Card */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-slate-900">Upcoming Duty</h2>
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase rounded-md tracking-wider whitespace-nowrap">
-                CONFIRMED
-              </span>
-            </div>
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+            <div className="p-5 flex-1">
+              {duties.length > 0 ? (() => {
+                const upcomingDuty = duties.find(d => d.status === "Accepted");
+                if (!upcomingDuty) {
+                  return (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-500 py-10">
+                      <p>No upcoming duties at the moment.</p>
+                    </div>
+                  );
+                }
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-5">
+                      <h2 className="text-lg font-bold text-slate-900">Next Upcoming Duty</h2>
+                      <span className="px-3 py-1 bg-primary-50 text-primary-700 text-xs font-bold rounded-full border border-primary-100 flex items-center gap-1.5 shadow-sm">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary-600 animate-pulse"></span>
+                        CONFIRMED
+                      </span>
+                    </div>
 
-            <div className="grid grid-cols-2 gap-y-6 gap-x-4 mb-6">
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Subject</p>
-                <p className="text-sm font-semibold text-slate-900">Advanced Macroeconomics (ECON-402)</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Room</p>
-                <p className="text-sm font-semibold text-slate-900">Main Hall A, Level 2</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Date & Time</p>
-                <div className="flex items-center gap-1.5 text-sm text-slate-700">
-                  <Calendar size={16} className="text-primary-600" />
-                  {currentMonthName} 24, {currentYear} • 09:00 AM - 12:00 PM
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Reporting Status</p>
-                <div className="flex items-center gap-1.5 text-sm text-slate-700">
-                  <CheckCircle2 size={16} className="text-slate-500" />
-                  On standby - Arrive 20m early
-                </div>
-              </div>
-            </div>
+                    <div className="grid grid-cols-2 gap-y-6 gap-x-4 mb-6">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Subject</p>
+                        <p className="text-sm font-semibold text-slate-900">{upcomingDuty.examId?.subjectName}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Room</p>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {upcomingDuty.venueId?.room ? `Room ${upcomingDuty.venueId.room}` : "TBD"}
+                        </p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Date & Time</p>
+                        <div className="flex items-center gap-1.5 text-sm text-slate-700">
+                          <Calendar size={16} className="text-primary-600" />
+                          {upcomingDuty.examId?.examDate ? new Date(upcomingDuty.examId.examDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "TBD"}
+                          {' • '} 
+                          {upcomingDuty.examId?.startTime || "TBD"}
+                        </div>
+                      </div>
+                    </div>
 
-            <div className="border-t border-slate-200 pt-5 flex flex-wrap items-center gap-3">
-              <button 
-                onClick={handleConfirmDuty}
-                disabled={dutyConfirmed}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  dutyConfirmed 
-                    ? "bg-emerald-100 text-emerald-700 cursor-not-allowed" 
-                    : "bg-primary-600 text-white hover:bg-primary-700"
-                }`}
-              >
-                <CheckCircle2 size={16} />
-                {dutyConfirmed ? "Duty Confirmed!" : "Confirm Duty"}
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors">
-                <AlertTriangle size={16} />
-                Report Issue
-              </button>
-              <button 
-                onClick={() => setShowCancellation(true)}
-                className="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors"
-              >
-                <XCircle size={16} />
-                Request Cancellation
-              </button>
+                    <div className="border-t border-slate-200 pt-5 flex flex-wrap items-center gap-3">
+                      <button 
+                        disabled
+                        className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors bg-emerald-100 text-emerald-700 cursor-not-allowed"
+                      >
+                        <CheckCircle2 size={16} />
+                        Duty Confirmed!
+                      </button>
+                      <button 
+                        onClick={() => setShowCancellation(true)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all"
+                      >
+                        <AlertTriangle size={16} />
+                        Request Cancellation
+                      </button>
+                    </div>
+                  </>
+                );
+              })() : (
+                <div className="h-full flex flex-col items-center justify-center text-slate-500 py-10">
+                  <p>No upcoming duties at the moment.</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -150,9 +204,9 @@ const ProfessorDashboard = () => {
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
             <div className="flex items-center justify-between p-5 border-b border-slate-200">
               <h2 className="text-lg font-bold text-slate-900">My Duties</h2>
-              <button className="text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors">
+              <Link to="/professor/duties" className="text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors">
                 View All
-              </button>
+              </Link>
             </div>
             
             <table className="w-full text-left border-collapse">
@@ -166,7 +220,7 @@ const ProfessorDashboard = () => {
               </thead>
               <tbody className="divide-y divide-slate-200 text-sm">
                 <tr className="hover:bg-slate-50 transition-colors">
-                  <td className="px-5 py-3 text-slate-700">{currentMonthName.substring(0, 3)} 28</td>
+                  <td className="px-5 py-3 text-slate-700">Oct 28</td>
                   <td className="px-5 py-3 font-semibold text-slate-900">Quant Finance</td>
                   <td className="px-5 py-3 text-slate-700">Lab 402</td>
                   <td className="px-5 py-3">
@@ -200,9 +254,9 @@ const ProfessorDashboard = () => {
                 <h2 className="text-lg font-bold text-slate-900">Open Opportunities</h2>
                 <p className="text-xs text-slate-500 mt-1">Upcoming exams needing invigilators</p>
               </div>
-              <button className="text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors">
+              <Link to="/professor/duties" className="text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors">
                 View All
-              </button>
+              </Link>
             </div>
             
             <table className="w-full text-left border-collapse">
@@ -222,9 +276,15 @@ const ProfessorDashboard = () => {
                       </td>
                       <td className="px-5 py-3 font-semibold text-slate-900">{exam.subjectName}</td>
                       <td className="px-5 py-3 text-right">
-                        <button onClick={() => alert(`Successfully volunteered for ${exam.subjectName} duty!`)} className="px-3 py-1.5 bg-primary-50 text-primary-700 hover:bg-primary-100 border border-primary-200 rounded-md text-xs font-semibold transition-colors shadow-sm whitespace-nowrap">
-                          Volunteer
-                        </button>
+                        {requestedExams.has(exam._id) || (exam.volunteers && exam.volunteers.includes(localStorage.getItem("userId") || "")) ? (
+                           <button disabled className="px-3 py-1.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-md text-xs font-semibold shadow-sm whitespace-nowrap cursor-not-allowed">
+                             Requested
+                           </button>
+                        ) : (
+                          <button onClick={() => handleVolunteer(exam)} className="px-3 py-1.5 bg-primary-50 text-primary-700 hover:bg-primary-100 border border-primary-200 rounded-md text-xs font-semibold transition-colors shadow-sm whitespace-nowrap">
+                            Volunteer
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -248,10 +308,10 @@ const ProfessorDashboard = () => {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold text-slate-900">Availability</h2>
               <div className="flex items-center gap-1">
-                <button className="p-1 hover:bg-slate-100 rounded-full text-slate-600 transition-colors">
+                <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded-full text-slate-600 transition-colors">
                   <ChevronLeft size={20} />
                 </button>
-                <button className="p-1 hover:bg-slate-100 rounded-full text-slate-600 transition-colors">
+                <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 rounded-full text-slate-600 transition-colors">
                   <ChevronRight size={20} />
                 </button>
               </div>
@@ -271,21 +331,31 @@ const ProfessorDashboard = () => {
                   </div>
                 ))}
                 
-                {currentMonthDays.map((day) => (
+                {currentMonthDays.map((day) => {
+                  const isOctober2024 = currentMonth === 9 && currentYear === 2024;
+                  const isConfirmed = isOctober2024 && confirmedDates.includes(day);
+                  const isSelected = isOctober2024 && selectedDates.includes(day);
+                  
+                  return (
                   <div
                     key={`curr-${day}`}
                     onClick={() => handleDateClick(day)}
                     className={`cursor-pointer mx-auto w-7 h-7 flex items-center justify-center rounded-full transition-colors ${
-                      confirmedDates.includes(day)
+                      isConfirmed
                         ? "bg-emerald-500 text-white shadow-sm font-bold ring-2 ring-offset-1 ring-emerald-500"
-                        : selectedDates.includes(day)
+                        : volunteerDates.includes(day)
+                        ? "bg-blue-500 text-white shadow-sm font-bold ring-2 ring-offset-1 ring-blue-500"
+                        : isSelected
                         ? "bg-primary-600 text-white shadow-sm"
+                        : (isCurrentMonthViewed && day === todayDate)
+                        ? "border-2 border-primary-500 text-primary-700 font-bold bg-primary-50"
                         : "text-slate-700 hover:bg-slate-100"
                     }`}
                   >
                     {day}
                   </div>
-                ))}
+                  );
+                })}
                 
                 {nextMonthDays.map((day, idx) => (
                   <div key={`next-${idx}`} className="text-slate-300 mx-auto w-7 h-7 flex items-center justify-center">

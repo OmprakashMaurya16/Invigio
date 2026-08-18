@@ -9,8 +9,7 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "seed:user": "node src/scripts/addUser.js",
-    "seed:admin": "node src/scripts/seedAdmin.js"
+    "seed": "node src/scripts/seed.js"
   },
   "keywords": [
     "nodejs",
@@ -31,6 +30,7 @@
     "jsonwebtoken": "^9.0.3",
     "mongodb-memory-server": "^11.2.0",
     "mongoose": "^9.6.3",
-    "nodemailer": "^9.0.1"
+    "nodemailer": "^9.0.1",
+    "socket.io": "^4.8.3"
   }
 }

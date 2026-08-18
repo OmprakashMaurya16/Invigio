@@ -1,0 +1,2550 @@
+﻿commit 4d5189c0fead4675d48065323ca4e2d737b4084d
+Author: Chaitralimith27 <chaitrali.mithbawkar@vit.edu.in>
+Date:   Mon Aug 17 22:56:39 2026 +0530
+
+    Update exam allocation and duty notification flow
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..19b06d1
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,37 @@
++node_modules/
++
++.env
++.env.local
++.env.development.local
++.env.test.local
++.env.production.local
++
++logs/
++*.log
++npm-debug.log*
++yarn-debug.log*
++yarn-error.log*
++
++pids/
++*.pid
++*.seed
++*.pid.lock
++
++coverage/
++dist/
++build/
++
++.cache/
++.parcel-cache/
++
++.DS_Store
++Thumbs.db
++
++.vscode/
++.idea/
++
++tmp/
++temp/
++
++.eslintcache
++.pnpm-store/
+diff --git a/backend/src/config/db.js b/backend/src/config/db.js
+index 73933e1..4fb04a8 100644
+--- a/backend/src/config/db.js
++++ b/backend/src/config/db.js
+@@ -1,5 +1,9 @@
++const dns = require("dns");
+ const mongoose = require("mongoose");
+ 
++// Use reliable public DNS servers for MongoDB Atlas SRV resolution
++dns.setServers(["8.8.8.8", "1.1.1.1"]);
++
+ const connectDB = async () => {
+   try {
+     await mongoose.connect(process.env.MONGO_URI);
+@@ -11,4 +15,4 @@ const connectDB = async () => {
+   }
+ };
+ 
+-module.exports = connectDB;
++module.exports = connectDB;
+\ No newline at end of file
+diff --git a/backend/src/controllers/duty.controller.js b/backend/src/controllers/duty.controller.js
+index b9b30e0..b0fa46f 100644
+--- a/backend/src/controllers/duty.controller.js
++++ b/backend/src/controllers/duty.controller.js
+@@ -1,17 +1,33 @@
++
+ const ExamDuty = require("../models/examDuty.model.js");
+ const Exam = require("../models/exam.model.js");
++const Notification = require("../models/notification.model.js");
++const User = require("../models/user.model.js");
+ 
+ const getMyDuties = async (req, res) => {
+   try {
+-    const duties = await ExamDuty.find({ professorId: req.user._id })
++    const duties = await ExamDuty.find({
++      professorId: req.user._id,
++    })
+       .populate("examId")
+-      .populate("venueId", "block room")
++      .populate("venueId", "block room capacity")
+       .sort({ createdAt: -1 });
+ 
+-    return res.status(200).json({ success: true, duties });
++    return res.status(200).json({
++      success: true,
++      total: duties.length,
++      duties,
++    });
+   } catch (error) {
+-    console.error("Get duties error:", error.message);
+-    return res.status(500).json({ success: false, message: "Unable to fetch duties" });
++    console.error(
++      "Get duties error:",
++      error.message,
++    );
++
++    return res.status(500).json({
++      success: false,
++      message: "Unable to fetch duties",
++    });
+   }
+ };
+ 
+@@ -20,50 +36,236 @@ const respondToDuty = async (req, res) => {
+     const { id } = req.params;
+     const { status, reason } = req.body;
+ 
++    /*
++     * Validate duty response status.
++     */
+     if (!["Accepted", "Rejected"].includes(status)) {
+-      return res.status(400).json({ success: false, message: "Invalid status" });
++      return res.status(400).json({
++        success: false,
++        message:
++          "Status must be either Accepted or Rejected",
++      });
+     }
+ 
+-    if (status === "Rejected" && (!reason || reason.trim() === "")) {
+-      return res.status(400).json({ success: false, message: "A reason is required when rejecting a duty" });
++    /*
++     * Rejection reason is mandatory.
++     */
++    if (
++      status === "Rejected" &&
++      (!reason || reason.trim() === "")
++    ) {
++      return res.status(400).json({
++        success: false,
++        message:
++          "A reason is required when rejecting a duty",
++      });
+     }
+ 
+-    const duty = await ExamDuty.findOne({ _id: id, professorId: req.user._id }).populate("examId");
+-    
++    /*
++     * Find the duty belonging to the logged-in professor.
++     *
++     * populate("examId") is important because the
++     * notification needs exam subject/code.
++     */
++    const duty = await ExamDuty.findOne({
++      _id: id,
++      professorId: req.user._id,
++    }).populate("examId");
++
+     if (!duty) {
+-      return res.status(404).json({ success: false, message: "Duty not found or unauthorized" });
++      return res.status(404).json({
++        success: false,
++        message:
++          "Duty not found or unauthorized",
++      });
+     }
+ 
++    /*
++     * A duty can only be responded to once.
++     */
+     if (duty.status !== "Pending") {
+-      return res.status(400).json({ success: false, message: "Duty has already been responded to" });
++      return res.status(400).json({
++        success: false,
++        message:
++          "Duty has already been responded to",
++      });
++    }
++
++    /*
++     * Make sure the associated exam exists.
++     */
++    if (!duty.examId) {
++      return res.status(404).json({
++        success: false,
++        message:
++          "Associated exam not found",
++      });
++    }
++
++    /*
++     * Professors cannot respond to cancelled
++     * or completed exams.
++     */
++    if (
++      ["Cancelled", "Completed"].includes(
++        duty.examId.status,
++      )
++    ) {
++      return res.status(400).json({
++        success: false,
++        message:
++          `Cannot respond to a ${duty.examId.status.toLowerCase()} exam duty`,
++      });
+     }
+ 
++    /*
++     * Update duty status.
++     */
+     duty.status = status;
++
+     if (status === "Rejected") {
+-      duty.rejectionReason = reason;
++      duty.rejectionReason = reason.trim();
++
++      /*
++       * A rejected professor must not retain
++       * a venue assignment.
++       */
++      duty.venueId = undefined;
+     }
+-    
++
++    if (status === "Accepted") {
++      /*
++       * Clear any old rejection reason.
++       */
++      duty.rejectionReason = "";
++    }
++
+     await duty.save();
+ 
++    /*
++     * --------------------------------------------------
++     * ADMIN NOTIFICATION
++     * --------------------------------------------------
++     *
++     * Notify all active admins when a professor
++     * accepts or rejects an exam duty.
++     *
++     * Notification failure must NOT break the
++     * actual duty response.
++     */
++    try {
++      const admins = await User.find({
++        role: "ADMIN",
++        isActive: true,
++      }).select("_id");
++
++      if (admins.length > 0) {
++        const notifications = admins.map((admin) => ({
++          userId: admin._id,
++
++          title:
++            status === "Accepted"
++              ? "Duty Accepted"
++              : "Duty Rejected",
++
++          message:
++            status === "Accepted"
++              ? `A professor has accepted the invigilation duty for ${duty.examId.subjectName} (${duty.examId.subjectCode}).`
++              : `A professor has rejected the invigilation duty for ${duty.examId.subjectName} (${duty.examId.subjectCode}). Reason: ${reason.trim()}`,
++
++          type:
++            status === "Accepted"
++              ? "duty_accepted"
++              : "duty_rejected",
++
++          relatedId: duty._id,
++        }));
++
++        /*
++         * Save notifications in MongoDB.
++         */
++        await Notification.insertMany(
++          notifications,
++        );
++
++        /*
++         * Send real-time notifications through Socket.IO.
++         */
++        const io = req.app.get("io");
++
++        if (io) {
++          admins.forEach((admin) => {
++            io.emit("new_notification", {
++              userId: admin._id,
++
++              title:
++                status === "Accepted"
++                  ? "Duty Accepted"
++                  : "Duty Rejected",
++
++              message:
++                status === "Accepted"
++                  ? `A professor has accepted the duty for ${duty.examId.subjectName}.`
++                  : `A professor has rejected the duty for ${duty.examId.subjectName}.`,
++
++              type:
++                status === "Accepted"
++                  ? "duty_accepted"
++                  : "duty_rejected",
++
++              relatedId: duty._id,
++            });
++          });
++        }
++      }
++    } catch (notificationError) {
++      console.error(
++        "Duty response notification failed:",
++        notificationError.message,
++      );
++    }
++
++    /*
++     * Existing Socket.IO duty status event.
++     */
+     const io = req.app.get("io");
++
+     if (io) {
+-      io.emit("duty_status_update", { 
+-        dutyId: duty._id, 
+-        status: duty.status, 
++      io.emit("duty_status_update", {
++        dutyId: duty._id,
++        status: duty.status,
+         examId: duty.examId._id,
+-        professorId: req.user._id
++        professorId: req.user._id,
+       });
+     }
+ 
+-    return res.status(200).json({ 
+-      success: true, 
+-      message: `Duty ${status.toLowerCase()} successfully`, 
+-      duty 
++    /*
++     * Return successful response.
++     */
++    return res.status(200).json({
++      success: true,
++      message:
++        status === "Accepted"
++          ? "Duty accepted successfully"
++          : "Duty rejected successfully",
++      duty,
+     });
+   } catch (error) {
+-    console.error("Respond duty error:", error.message);
+-    return res.status(500).json({ success: false, message: "Unable to respond to duty" });
++    console.error(
++      "Respond duty error:",
++      error.message,
++    );
++
++    return res.status(500).json({
++      success: false,
++      message:
++        "Unable to respond to duty",
++    });
+   }
+ };
+ 
+-module.exports = { getMyDuties, respondToDuty };
++module.exports = {
++  getMyDuties,
++  respondToDuty,
++};
++
+diff --git a/backend/src/controllers/exam.controller.js b/backend/src/controllers/exam.controller.js
+index 1a64db8..3282e46 100644
+--- a/backend/src/controllers/exam.controller.js
++++ b/backend/src/controllers/exam.controller.js
+@@ -1,6 +1,9 @@
++
+ const Exam = require("../models/exam.model.js");
+ const ExamDuty = require("../models/examDuty.model.js");
++const ExamAllocation = require("../models/examAllocation.model.js");
+ const User = require("../models/user.model.js");
++const Notification = require("../models/notification.model.js");
+ 
+ const VALID_STATUSES = [
+   "Draft",
+@@ -11,6 +14,28 @@ const VALID_STATUSES = [
+   "Postponed",
+ ];
+ 
++const timeToMinutes = (timeStr) => {
++  if (
++    typeof timeStr !== "string" ||
++    !/^\d{1,2}:\d{2}$/.test(timeStr)
++  ) {
++    return NaN;
++  }
++
++  const [hours, minutes] = timeStr.split(":").map(Number);
++
++  if (
++    hours < 0 ||
++    hours > 23 ||
++    minutes < 0 ||
++    minutes > 59
++  ) {
++    return NaN;
++  }
++
++  return hours * 60 + minutes;
++};
++
+ const createExam = async (req, res) => {
+   try {
+     const {
+@@ -22,25 +47,28 @@ const createExam = async (req, res) => {
+       examDate,
+       startTime,
+       endTime,
+-      requiredInvigilators,
+       status,
+     } = req.body;
+ 
+     const missingFields = [];
++
+     if (!subjectCode) missingFields.push("subjectCode");
+     if (!subjectName) missingFields.push("subjectName");
+     if (!academicYear) missingFields.push("academicYear");
+-    if (!semester) missingFields.push("semester");
++
++    if (semester === undefined || semester === null) {
++      missingFields.push("semester");
++    }
++
+     if (!branch) missingFields.push("branch");
+     if (!examDate) missingFields.push("examDate");
+     if (!startTime) missingFields.push("startTime");
+     if (!endTime) missingFields.push("endTime");
+-    if (!requiredInvigilators) missingFields.push("requiredInvigilators");
+ 
+     if (missingFields.length > 0) {
+       return res.status(400).json({
+         success: false,
+-        message: `Missing or invalid fields: ${missingFields.join(", ")}`,
++        message: "Missing fields: " + missingFields.join(", "),
+       });
+     }
+ 
+@@ -51,32 +79,132 @@ const createExam = async (req, res) => {
+       });
+     }
+ 
++    if (
++      !Number.isInteger(Number(semester)) ||
++      Number(semester) < 1
++    ) {
++      return res.status(400).json({
++        success: false,
++        message: "semester must be a positive integer",
++      });
++    }
++
++    if (status && !VALID_STATUSES.includes(status)) {
++      return res.status(400).json({
++        success: false,
++        message:
++          "Invalid status. Valid values: " +
++          VALID_STATUSES.join(", "),
++      });
++    }
++
++    const examStart = timeToMinutes(startTime);
++    const examEnd = timeToMinutes(endTime);
++
++    if (
++      Number.isNaN(examStart) ||
++      Number.isNaN(examEnd) ||
++      examStart >= examEnd
++    ) {
++      return res.status(400).json({
++        success: false,
++        message:
++          "Invalid exam time. startTime must be before endTime",
++      });
++    }
++
+     const exam = await Exam.create({
+       subjectCode,
+       subjectName,
+       academicYear,
+-      semester,
++      semester: Number(semester),
+       branch,
+       examDate,
+       startTime,
+       endTime,
+-      requiredInvigilators,
+       status: status || "Scheduled",
+     });
+ 
+-    
+-    const professors = await User.find({ role: "PROFESSOR" });
+-    for (const prof of professors) {
+-      await ExamDuty.create({
++    /*
++     * Create one Pending duty for every professor.
++     *
++     * Required invigilators are decided later by
++     * ExamAllocation for each classroom.
++     */
++    const professors = await User.find({
++      role: "PROFESSOR",
++    }).select("_id");
++
++    if (professors.length > 0) {
++      const duties = professors.map((professor) => ({
+         examId: exam._id,
+-        professorId: prof._id,
++        professorId: professor._id,
+         status: "Pending",
+         role: "Invigilator",
+-      });
++      }));
++
++      await ExamDuty.insertMany(duties);
++    }
++
++    /*
++     * Create exam notifications.
++     *
++     * Notification failure must not break exam creation.
++     */
++    try {
++      if (professors.length > 0) {
++        const notifications = professors.map((professor) => ({
++          userId: professor._id,
++          title: "New Exam Scheduled",
++          message:
++            "A new exam has been scheduled: " +
++            exam.subjectName +
++            " (" +
++            exam.subjectCode +
++            ") on " +
++            new Date(exam.examDate).toDateString() +
++            " from " +
++            exam.startTime +
++            " to " +
++            exam.endTime +
++            ". Please check your duties.",
++          type: "exam_created",
++          relatedId: exam._id,
++        }));
++
++        await Notification.insertMany(notifications);
++
++        const io = req.app.get("io");
++
++        if (io) {
++          professors.forEach((professor) => {
++            io.emit("new_notification", {
++              userId: professor._id,
++              title: "New Exam Scheduled",
++              message:
++                "A new exam has been scheduled: " +
++                exam.subjectName +
++                " (" +
++                exam.subjectCode +
++                "). Please check your duties.",
++              type: "exam_created",
++              relatedId: exam._id,
++            });
++          });
++        }
++      }
++    } catch (notificationError) {
++      console.error(
++        "Exam creation notification failed:",
++        notificationError.message
++      );
+     }
+ 
+-    
++    /*
++     * Notify connected clients about the new exam.
++     */
+     const io = req.app.get("io");
++
+     if (io) {
+       io.emit("new_exam_schedule", exam);
+     }
+@@ -85,9 +213,14 @@ const createExam = async (req, res) => {
+       success: true,
+       message: "Exam created successfully",
+       exam,
++      dutiesCreated: professors.length,
+     });
+   } catch (error) {
+-    console.error("Create exam error:", error.message);
++    console.error(
++      "Create exam error:",
++      error.message
++    );
++
+     return res.status(500).json({
+       success: false,
+       message: "Unable to create exam",
+@@ -97,23 +230,57 @@ const createExam = async (req, res) => {
+ 
+ const getAllExams = async (req, res) => {
+   try {
+-    const { status, branch, semester, academicYear, search } = req.query;
++    const {
++      status,
++      branch,
++      semester,
++      academicYear,
++      search,
++    } = req.query;
+ 
+     const filter = {};
+ 
+-    if (status) filter.status = status;
+-    if (semester) filter.semester = Number(semester);
+-    if (academicYear) filter.academicYear = academicYear;
+-    if (branch) filter.branch = { $in: [branch] };
++    if (status) {
++      filter.status = status;
++    }
++
++    if (semester) {
++      const semesterNumber = Number(semester);
++
++      if (!Number.isNaN(semesterNumber)) {
++        filter.semester = semesterNumber;
++      }
++    }
++
++    if (academicYear) {
++      filter.academicYear = academicYear;
++    }
++
++    if (branch) {
++      filter.branch = branch;
++    }
+ 
+     if (search) {
+       filter.$or = [
+-        { subjectCode: { $regex: search, $options: "i" } },
+-        { subjectName: { $regex: search, $options: "i" } },
++        {
++          subjectCode: {
++            $regex: search,
++            $options: "i",
++          },
++        },
++        {
++          subjectName: {
++            $regex: search,
++            $options: "i",
++          },
++        },
+       ];
+     }
+ 
+-    const exams = await Exam.find(filter).sort({ examDate: 1, startTime: 1 });
++    const exams = await Exam.find(filter).sort({
++      examDate: 1,
++      startTime: 1,
++    });
+ 
+     return res.status(200).json({
+       success: true,
+@@ -121,7 +288,11 @@ const getAllExams = async (req, res) => {
+       exams,
+     });
+   } catch (error) {
+-    console.error("Get all exams error:", error.message);
++    console.error(
++      "Get all exams error:",
++      error.message
++    );
++
+     return res.status(500).json({
+       success: false,
+       message: "Unable to fetch exams",
+@@ -147,7 +318,11 @@ const getExamById = async (req, res) => {
+       exam,
+     });
+   } catch (error) {
+-    console.error("Get exam by id error:", error.message);
++    console.error(
++      "Get exam by id error:",
++      error.message
++    );
++
+     return res.status(500).json({
+       success: false,
+       message: "Unable to fetch exam",
+@@ -158,6 +333,7 @@ const getExamById = async (req, res) => {
+ const updateExam = async (req, res) => {
+   try {
+     const { id } = req.params;
++
+     const {
+       subjectCode,
+       subjectName,
+@@ -167,7 +343,6 @@ const updateExam = async (req, res) => {
+       examDate,
+       startTime,
+       endTime,
+-      requiredInvigilators,
+       status,
+     } = req.body;
+ 
+@@ -190,7 +365,9 @@ const updateExam = async (req, res) => {
+     if (status && !VALID_STATUSES.includes(status)) {
+       return res.status(400).json({
+         success: false,
+-        message: `Invalid status. Valid values: ${VALID_STATUSES.join(", ")}`,
++        message:
++          "Invalid status. Valid values: " +
++          VALID_STATUSES.join(", "),
+       });
+     }
+ 
+@@ -204,16 +381,79 @@ const updateExam = async (req, res) => {
+       });
+     }
+ 
+-    if (subjectCode !== undefined) exam.subjectCode = subjectCode;
+-    if (subjectName !== undefined) exam.subjectName = subjectName;
+-    if (academicYear !== undefined) exam.academicYear = academicYear;
+-    if (semester !== undefined) exam.semester = semester;
+-    if (branch !== undefined) exam.branch = branch;
+-    if (examDate !== undefined) exam.examDate = examDate;
+-    if (startTime !== undefined) exam.startTime = startTime;
+-    if (endTime !== undefined) exam.endTime = endTime;
+-    if (requiredInvigilators !== undefined) exam.requiredInvigilators = requiredInvigilators;
+-    if (status !== undefined) exam.status = status;
++    if (
++      semester !== undefined &&
++      (
++        !Number.isInteger(Number(semester)) ||
++        Number(semester) < 1
++      )
++    ) {
++      return res.status(400).json({
++        success: false,
++        message: "semester must be a positive integer",
++      });
++    }
++
++    const finalStartTime =
++      startTime !== undefined
++        ? startTime
++        : exam.startTime;
++
++    const finalEndTime =
++      endTime !== undefined
++        ? endTime
++        : exam.endTime;
++
++    const examStart = timeToMinutes(finalStartTime);
++    const examEnd = timeToMinutes(finalEndTime);
++
++    if (
++      Number.isNaN(examStart) ||
++      Number.isNaN(examEnd) ||
++      examStart >= examEnd
++    ) {
++      return res.status(400).json({
++        success: false,
++        message:
++          "Invalid exam time. startTime must be before endTime",
++      });
++    }
++
++    if (subjectCode !== undefined) {
++      exam.subjectCode = subjectCode;
++    }
++
++    if (subjectName !== undefined) {
++      exam.subjectName = subjectName;
++    }
++
++    if (academicYear !== undefined) {
++      exam.academicYear = academicYear;
++    }
++
++    if (semester !== undefined) {
++      exam.semester = Number(semester);
++    }
++
++    if (branch !== undefined) {
++      exam.branch = branch;
++    }
++
++    if (examDate !== undefined) {
++      exam.examDate = examDate;
++    }
++
++    if (startTime !== undefined) {
++      exam.startTime = startTime;
++    }
++
++    if (endTime !== undefined) {
++      exam.endTime = endTime;
++    }
++
++    if (status !== undefined) {
++      exam.status = status;
++    }
+ 
+     await exam.save();
+ 
+@@ -223,7 +463,11 @@ const updateExam = async (req, res) => {
+       exam,
+     });
+   } catch (error) {
+-    console.error("Update exam error:", error.message);
++    console.error(
++      "Update exam error:",
++      error.message
++    );
++
+     return res.status(500).json({
+       success: false,
+       message: "Unable to update exam",
+@@ -235,7 +479,7 @@ const deleteExam = async (req, res) => {
+   try {
+     const { id } = req.params;
+ 
+-    const exam = await Exam.findByIdAndDelete(id);
++    const exam = await Exam.findById(id);
+ 
+     if (!exam) {
+       return res.status(404).json({
+@@ -244,12 +488,36 @@ const deleteExam = async (req, res) => {
+       });
+     }
+ 
++    const dutyCount =
++      await ExamDuty.countDocuments({
++        examId: id,
++      });
++
++    const allocationCount =
++      await ExamAllocation.countDocuments({
++        examId: id,
++      });
++
++    if (dutyCount > 0 || allocationCount > 0) {
++      return res.status(400).json({
++        success: false,
++        message:
++          "Cannot delete an exam with existing duties or venue allocations. Cancel the exam instead.",
++      });
++    }
++
++    await exam.deleteOne();
++
+     return res.status(200).json({
+       success: true,
+       message: "Exam deleted successfully",
+     });
+   } catch (error) {
+-    console.error("Delete exam error:", error.message);
++    console.error(
++      "Delete exam error:",
++      error.message
++    );
++
+     return res.status(500).json({
+       success: false,
+       message: "Unable to delete exam",
+@@ -284,16 +552,121 @@ const cancelExam = async (req, res) => {
+       });
+     }
+ 
++    /*
++     * Find professors with duties before changing
++     * the duty statuses.
++     */
++    const affectedDuties = await ExamDuty.find({
++      examId: exam._id,
++    }).select("professorId status");
++
+     exam.status = "Cancelled";
++
+     await exam.save();
+ 
++    /*
++     * Pending duties are rejected.
++     * Accepted duties are retained for history.
++     */
++    await ExamDuty.updateMany(
++      {
++        examId: exam._id,
++        status: "Pending",
++      },
++      {
++        $set: {
++          status: "Rejected",
++          rejectionReason: "Exam cancelled",
++        },
++        $unset: {
++          venueId: "",
++        },
++      }
++    );
++
++    /*
++     * Send cancellation notifications.
++     */
++    try {
++      if (affectedDuties.length > 0) {
++        const professorIds = affectedDuties.map(
++          (duty) => duty.professorId
++        );
++
++        const uniqueProfessorIds = [
++          ...new Map(
++            professorIds.map((id) => [
++              String(id),
++              id,
++            ])
++          ).values(),
++        ];
++
++        const notifications =
++          uniqueProfessorIds.map((professorId) => ({
++            userId: professorId,
++            title: "Exam Cancelled",
++            message:
++              "The exam " +
++              exam.subjectName +
++              " (" +
++              exam.subjectCode +
++              ") scheduled for " +
++              new Date(exam.examDate).toDateString() +
++              " has been cancelled.",
++            type: "exam_cancelled",
++            relatedId: exam._id,
++          }));
++
++        await Notification.insertMany(notifications);
++
++        const io = req.app.get("io");
++
++        if (io) {
++          uniqueProfessorIds.forEach((professorId) => {
++            io.emit("new_notification", {
++              userId: professorId,
++              title: "Exam Cancelled",
++              message:
++                "The exam " +
++                exam.subjectName +
++                " (" +
++                exam.subjectCode +
++                ") has been cancelled.",
++              type: "exam_cancelled",
++              relatedId: exam._id,
++            });
++          });
++        }
++      }
++    } catch (notificationError) {
++      console.error(
++        "Exam cancellation notification failed:",
++        notificationError.message
++      );
++    }
++
++    const io = req.app.get("io");
++
++    if (io) {
++      io.emit("exam_cancelled", {
++        examId: exam._id,
++        subjectCode: exam.subjectCode,
++        subjectName: exam.subjectName,
++      });
++    }
++
+     return res.status(200).json({
+       success: true,
+       message: "Exam cancelled successfully",
+       exam,
+     });
+   } catch (error) {
+-    console.error("Cancel exam error:", error.message);
++    console.error(
++      "Cancel exam error:",
++      error.message
++    );
++
+     return res.status(500).json({
+       success: false,
+       message: "Unable to cancel exam",
+@@ -309,3 +682,4 @@ module.exports = {
+   deleteExam,
+   cancelExam,
+ };
++
+diff --git a/backend/src/controllers/examVenue.controller.js b/backend/src/controllers/examVenue.controller.js
+index 25507ae..33e6350 100644
+--- a/backend/src/controllers/examVenue.controller.js
++++ b/backend/src/controllers/examVenue.controller.js
+@@ -3,6 +3,23 @@ const Exam = require("../models/exam.model.js");
+ const Venue = require("../models/venue.model.js");
+ const ExamDuty = require("../models/examDuty.model.js");
+ const Notification = require("../models/notification.model.js");
++const Availability = require("../models/availability.model.js");
++
++const populateAllocation = async (allocation) => {
++  await allocation.populate([
++    {
++      path: "examId",
++      select:
++        "subjectCode subjectName examDate startTime endTime status",
++    },
++    {
++      path: "venueId",
++      select: "block room capacity",
++    },
++  ]);
++
++  return allocation;
++};
+ 
+ const getExamVenues = async (req, res) => {
+   try {
+@@ -10,9 +27,13 @@ const getExamVenues = async (req, res) => {
+       .populate([
+         {
+           path: "examId",
+-          select: "subjectCode subjectName examDate startTime endTime status",
++          select:
++            "subjectCode subjectName examDate startTime endTime status",
++        },
++        {
++          path: "venueId",
++          select: "block room capacity",
+         },
+-        { path: "venueId", select: "block room" },
+       ])
+       .sort({ createdAt: -1 });
+ 
+@@ -22,7 +43,11 @@ const getExamVenues = async (req, res) => {
+       examVenues: allocations,
+     });
+   } catch (error) {
+-    console.error("Get exam-venues error:", error.message);
++    console.error(
++      "Get exam-venues error:",
++      error.message,
++    );
++
+     return res.status(500).json({
+       success: false,
+       message: "Unable to fetch exam-venue allocations",
+@@ -32,16 +57,41 @@ const getExamVenues = async (req, res) => {
+ 
+ const createExamVenue = async (req, res) => {
+   try {
+-    const { examId, venueId, requiredInvigilators } = req.body;
++    const {
++      examId,
++      venueId,
++      requiredInvigilators,
++    } = req.body;
++
++    if (
++      !examId ||
++      !venueId ||
++      requiredInvigilators === undefined
++    ) {
++      return res.status(400).json({
++        success: false,
++        message:
++          "examId, venueId and requiredInvigilators are required",
++      });
++    }
++
++    const requiredCount = Number(
++      requiredInvigilators,
++    );
+ 
+-    if (!examId || !venueId || !requiredInvigilators) {
++    if (
++      !Number.isInteger(requiredCount) ||
++      requiredCount < 1
++    ) {
+       return res.status(400).json({
+         success: false,
+-        message: "examId, venueId and requiredInvigilators are required",
++        message:
++          "requiredInvigilators must be a positive integer",
+       });
+     }
+ 
+     const exam = await Exam.findById(examId);
++
+     if (!exam) {
+       return res.status(404).json({
+         success: false,
+@@ -49,14 +99,20 @@ const createExamVenue = async (req, res) => {
+       });
+     }
+ 
+-    if (exam.status === "Cancelled") {
++    if (
++      ["Cancelled", "Completed"].includes(
++        exam.status,
++      )
++    ) {
+       return res.status(400).json({
+         success: false,
+-        message: "Cannot assign a venue to a cancelled exam",
++        message:
++          "Cannot assign a venue to a cancelled or completed exam",
+       });
+     }
+ 
+     const venue = await Venue.findById(venueId);
++
+     if (!venue) {
+       return res.status(404).json({
+         success: false,
+@@ -64,38 +120,84 @@ const createExamVenue = async (req, res) => {
+       });
+     }
+ 
+-    const duplicate = await ExamAllocation.findOne({ examId, venueId });
++    if (
++      venue.capacity !== undefined &&
++      requiredCount > venue.capacity
++    ) {
++      return res.status(400).json({
++        success: false,
++        message:
++          `requiredInvigilators cannot exceed venue capacity (${venue.capacity})`,
++      });
++    }
++
++    const duplicate =
++      await ExamAllocation.findOne({
++        examId,
++        venueId,
++      });
++
+     if (duplicate) {
+       return res.status(409).json({
+         success: false,
+-        message: "This venue is already assigned to this exam",
++        message:
++          "This venue is already assigned to this exam",
+       });
+     }
+ 
+-    const allocation = await ExamAllocation.create({
+-      examId,
+-      venueId,
+-      requiredInvigilators,
+-    });
++    /*
++     * There is no exam.requiredInvigilators anymore.
++     *
++     * Every classroom has its own invigilator requirement.
++     *
++     * Example:
++     *
++     * Room 101 -> 2
++     * Room 102 -> 3
++     * Room 103 -> 1
++     *
++     * Total = 6
++     *
++     * The total is calculated dynamically when
++     * generating the professor allocation.
++     */
+ 
+-    await allocation.populate([
+-      {
+-        path: "examId",
+-        select: "subjectCode subjectName examDate startTime endTime status",
+-      },
+-      { path: "venueId", select: "block room" },
+-    ]);
++    const allocation =
++      await ExamAllocation.create({
++        examId,
++        venueId,
++        requiredInvigilators: requiredCount,
++      });
++
++    await populateAllocation(allocation);
+ 
+     return res.status(201).json({
+       success: true,
+-      message: "Venue assigned to exam successfully",
++      message:
++        "Venue assigned to exam successfully",
+       examVenue: allocation,
+     });
+   } catch (error) {
+-    console.error("Create exam-venue error:", error.message);
++    console.error(
++      "Create exam-venue error:",
++      error.message,
++    );
++
++    /*
++     * Handles MongoDB duplicate-key errors as well.
++     */
++    if (error.code === 11000) {
++      return res.status(409).json({
++        success: false,
++        message:
++          "This venue is already assigned to this exam",
++      });
++    }
++
+     return res.status(500).json({
+       success: false,
+-      message: "Unable to assign venue to exam",
++      message:
++        "Unable to assign venue to exam",
+     });
+   }
+ };
+@@ -103,18 +205,59 @@ const createExamVenue = async (req, res) => {
+ const updateExamVenue = async (req, res) => {
+   try {
+     const { id } = req.params;
+-    const { venueId, requiredInvigilators } = req.body;
+ 
+-    const allocation = await ExamAllocation.findById(id);
++    const {
++      venueId,
++      requiredInvigilators,
++    } = req.body;
++
++    const allocation =
++      await ExamAllocation.findById(id);
++
+     if (!allocation) {
+       return res.status(404).json({
+         success: false,
+-        message: "Exam-venue allocation not found",
++        message:
++          "Exam-venue allocation not found",
+       });
+     }
+ 
+-    if (venueId && venueId !== String(allocation.venueId)) {
+-      const venue = await Venue.findById(venueId);
++    const exam = await Exam.findById(
++      allocation.examId,
++    );
++
++    if (!exam) {
++      return res.status(404).json({
++        success: false,
++        message: "Associated exam not found",
++      });
++    }
++
++    if (
++      ["Cancelled", "Completed"].includes(
++        exam.status,
++      )
++    ) {
++      return res.status(400).json({
++        success: false,
++        message:
++          "Cannot update venue allocation for a cancelled or completed exam",
++      });
++    }
++
++    let finalVenueId = allocation.venueId;
++
++    /*
++     * Change classroom if requested.
++     */
++    if (
++      venueId &&
++      String(venueId) !==
++        String(allocation.venueId)
++    ) {
++      const venue =
++        await Venue.findById(venueId);
++
+       if (!venue) {
+         return res.status(404).json({
+           success: false,
+@@ -122,46 +265,99 @@ const updateExamVenue = async (req, res) => {
+         });
+       }
+ 
+-      const duplicate = await ExamAllocation.findOne({
+-        examId: allocation.examId,
+-        venueId,
+-        _id: { $ne: id },
+-      });
++      const duplicate =
++        await ExamAllocation.findOne({
++          examId: allocation.examId,
++          venueId,
++          _id: { $ne: id },
++        });
+ 
+       if (duplicate) {
+         return res.status(409).json({
+           success: false,
+-          message: "This venue is already assigned to this exam",
++          message:
++            "This venue is already assigned to this exam",
+         });
+       }
+ 
+       allocation.venueId = venueId;
++      finalVenueId = venueId;
+     }
+ 
+-    if (requiredInvigilators !== undefined) {
+-      allocation.requiredInvigilators = requiredInvigilators;
++    /*
++     * Change classroom-specific invigilator count.
++     */
++    if (
++      requiredInvigilators !== undefined
++    ) {
++      const requiredCount = Number(
++        requiredInvigilators,
++      );
++
++      if (
++        !Number.isInteger(requiredCount) ||
++        requiredCount < 1
++      ) {
++        return res.status(400).json({
++          success: false,
++          message:
++            "requiredInvigilators must be a positive integer",
++        });
++      }
++
++      const venue =
++        await Venue.findById(finalVenueId);
++
++      if (!venue) {
++        return res.status(404).json({
++          success: false,
++          message: "Venue not found",
++        });
++      }
++
++      if (
++        venue.capacity !== undefined &&
++        requiredCount > venue.capacity
++      ) {
++        return res.status(400).json({
++          success: false,
++          message:
++            `requiredInvigilators cannot exceed venue capacity (${venue.capacity})`,
++        });
++      }
++
++      allocation.requiredInvigilators =
++        requiredCount;
+     }
+ 
+     await allocation.save();
+ 
+-    await allocation.populate([
+-      {
+-        path: "examId",
+-        select: "subjectCode subjectName examDate startTime endTime status",
+-      },
+-      { path: "venueId", select: "block room" },
+-    ]);
++    await populateAllocation(allocation);
+ 
+     return res.status(200).json({
+       success: true,
+-      message: "Exam-venue allocation updated successfully",
++      message:
++        "Exam-venue allocation updated successfully",
+       examVenue: allocation,
+     });
+   } catch (error) {
+-    console.error("Update exam-venue error:", error.message);
++    console.error(
++      "Update exam-venue error:",
++      error.message,
++    );
++
++    if (error.code === 11000) {
++      return res.status(409).json({
++        success: false,
++        message:
++          "This venue is already assigned to this exam",
++      });
++    }
++
+     return res.status(500).json({
+       success: false,
+-      message: "Unable to update exam-venue allocation",
++      message:
++        "Unable to update exam-venue allocation",
+     });
+   }
+ };
+@@ -170,155 +366,671 @@ const deleteExamVenue = async (req, res) => {
+   try {
+     const { id } = req.params;
+ 
+-    const allocation = await ExamAllocation.findByIdAndDelete(id);
++    const allocation =
++      await ExamAllocation.findById(id);
+ 
+     if (!allocation) {
+       return res.status(404).json({
+         success: false,
+-        message: "Exam-venue allocation not found",
++        message:
++          "Exam-venue allocation not found",
++      });
++    }
++
++    const exam = await Exam.findById(
++      allocation.examId,
++    );
++
++    if (
++      exam &&
++      ["Ongoing", "Completed"].includes(
++        exam.status,
++      )
++    ) {
++      return res.status(400).json({
++        success: false,
++        message:
++          "Cannot remove venue allocation for an ongoing or completed exam",
+       });
+     }
+ 
++    /*
++     * Remove venue assignment from duties that
++     * belonged to this classroom.
++     */
++    await ExamDuty.updateMany(
++      {
++        examId: allocation.examId,
++        venueId: allocation.venueId,
++      },
++      {
++        $unset: {
++          venueId: "",
++        },
++      },
++    );
++
++    await allocation.deleteOne();
++
+     return res.status(200).json({
+       success: true,
+-      message: "Exam-venue allocation removed successfully",
++      message:
++        "Exam-venue allocation removed successfully",
+     });
+   } catch (error) {
+-    console.error("Delete exam-venue error:", error.message);
++    console.error(
++      "Delete exam-venue error:",
++      error.message,
++    );
++
+     return res.status(500).json({
+       success: false,
+-      message: "Unable to remove exam-venue allocation",
++      message:
++        "Unable to remove exam-venue allocation",
+     });
+   }
+ };
+ 
+ const timeToMinutes = (timeStr) => {
+-  const [h, m] = timeStr.split(":").map(Number);
+-  return h * 60 + m;
++  if (
++    !timeStr ||
++    typeof timeStr !== "string"
++  ) {
++    return null;
++  }
++
++  const match =
++    /^(\d{1,2}):(\d{2})$/.exec(
++      timeStr.trim(),
++    );
++
++  if (!match) {
++    return null;
++  }
++
++  const hours = Number(match[1]);
++  const minutes = Number(match[2]);
++
++  if (
++    hours < 0 ||
++    hours > 23 ||
++    minutes < 0 ||
++    minutes > 59
++  ) {
++    return null;
++  }
++
++  return hours * 60 + minutes;
+ };
+ 
+-const generateAllocations = async (req, res) => {
++const isSameCalendarDate = (
++  date1,
++  date2,
++) => {
++  const a = new Date(date1);
++  const b = new Date(date2);
++
++  if (
++    Number.isNaN(a.getTime()) ||
++    Number.isNaN(b.getTime())
++  ) {
++    return false;
++  }
++
++  return (
++    a.getFullYear() === b.getFullYear() &&
++    a.getMonth() === b.getMonth() &&
++    a.getDate() === b.getDate()
++  );
++};
++
++const isProfessorAvailable = async (
++  professorId,
++  exam,
++) => {
++  const availability =
++    await Availability.findOne({
++      professorId,
++    });
++
++  /*
++   * No availability record means
++   * professor is considered available.
++   */
++  if (!availability) {
++    return true;
++  }
++
++  if (availability.isAvailable === false) {
++    return false;
++  }
++
++  const examDate =
++    new Date(exam.examDate);
++
++  if (
++    Number.isNaN(examDate.getTime())
++  ) {
++    return false;
++  }
++
++  if (availability.startDate) {
++    const startDate =
++      new Date(
++        availability.startDate,
++      );
++
++    if (examDate < startDate) {
++      return false;
++    }
++  }
++
++  if (availability.endDate) {
++    const endDate =
++      new Date(
++        availability.endDate,
++      );
++
++    if (examDate > endDate) {
++      return false;
++    }
++  }
++
++  const day = examDate.getDay();
++
++  const isWeekend =
++    day === 0 || day === 6;
++
++  if (
++    availability.weekendOnly &&
++    !isWeekend
++  ) {
++    return false;
++  }
++
++  const examStart =
++    timeToMinutes(exam.startTime);
++
++  if (examStart === null) {
++    return false;
++  }
++
++  /*
++   * Morning = before 12:00.
++   */
++  if (
++    availability.morningOnly &&
++    examStart >= 12 * 60
++  ) {
++    return false;
++  }
++
++  /*
++   * Afternoon = 12:00 onwards.
++   */
++  if (
++    availability.afternoonOnly &&
++    examStart < 12 * 60
++  ) {
++    return false;
++  }
++
++  return true;
++};
++
++const hasTimeConflict = async (
++  duty,
++  exam,
++) => {
++  const examStart =
++    timeToMinutes(exam.startTime);
++
++  const examEnd =
++    timeToMinutes(exam.endTime);
++
++  if (
++    examStart === null ||
++    examEnd === null
++  ) {
++    return true;
++  }
++
++  const existingDuties =
++    await ExamDuty.find({
++      professorId: duty.professorId,
++      status: "Accepted",
++      examId: {
++        $ne: exam._id,
++      },
++    }).populate({
++      path: "examId",
++      select:
++        "examDate startTime endTime status",
++    });
++
++  for (const existingDuty of existingDuties) {
++    if (!existingDuty.examId) {
++      continue;
++    }
++
++    if (
++      [
++        "Cancelled",
++        "Completed",
++      ].includes(
++        existingDuty.examId.status,
++      )
++    ) {
++      continue;
++    }
++
++    if (
++      !isSameCalendarDate(
++        existingDuty.examId.examDate,
++        exam.examDate,
++      )
++    ) {
++      continue;
++    }
++
++    const existingStart =
++      timeToMinutes(
++        existingDuty.examId.startTime,
++      );
++
++    const existingEnd =
++      timeToMinutes(
++        existingDuty.examId.endTime,
++      );
++
++    if (
++      existingStart === null ||
++      existingEnd === null
++    ) {
++      continue;
++    }
++
++    /*
++     * Two time ranges overlap when:
++     *
++     * newStart < existingEnd
++     * AND
++     * newEnd > existingStart
++     */
++    const overlaps =
++      examStart < existingEnd &&
++      examEnd > existingStart;
++
++    if (overlaps) {
++      return true;
++    }
++  }
++
++  return false;
++};
++
++const generateAllocations = async (
++  req,
++  res,
++) => {
+   try {
+-    const { examId: targetExamId } = req.body;
+-
+-    let exams;
+-    if (targetExamId) {
+-      const exam = await Exam.findById(targetExamId);
+-      if (!exam) {
+-        return res
+-          .status(404)
+-          .json({ success: false, message: "Exam not found" });
+-      }
+-      exams = [exam];
+-    } else {
+-      const allAllocations = await ExamAllocation.distinct("examId");
+-      exams = await Exam.find({
+-        _id: { $in: allAllocations },
+-        status: { $nin: ["Cancelled", "Completed"] },
++    const {
++      examId: targetExamId,
++    } = req.body;
++
++    if (!targetExamId) {
++      return res.status(400).json({
++        success: false,
++        message: "examId is required",
+       });
+     }
+ 
+-    let totalAssigned = 0;
++    const exam =
++      await Exam.findById(
++        targetExamId,
++      );
++
++    if (!exam) {
++      return res.status(404).json({
++        success: false,
++        message: "Exam not found",
++      });
++    }
++
++    if (
++      [
++        "Cancelled",
++        "Completed",
++      ].includes(exam.status)
++    ) {
++      return res.status(400).json({
++        success: false,
++        message:
++          "Cannot generate allocations for a cancelled or completed exam",
++      });
++    }
++
++    const examStart =
++      timeToMinutes(exam.startTime);
++
++    const examEnd =
++      timeToMinutes(exam.endTime);
++
++    if (
++      examStart === null ||
++      examEnd === null ||
++      examStart >= examEnd
++    ) {
++      return res.status(400).json({
++        success: false,
++        message:
++          "Exam startTime and endTime must be valid and startTime must be before endTime",
++      });
++    }
++
++    /*
++     * Get every classroom assigned to this exam.
++     */
++    const examAllocations =
++      await ExamAllocation.find({
++        examId: exam._id,
++      }).sort({
++        createdAt: 1,
++      });
++
++    if (!examAllocations.length) {
++      return res.status(400).json({
++        success: false,
++        message:
++          "No venues have been assigned to this exam",
++      });
++    }
++
++    /*
++     * Calculate total invigilators required
++     * from classroom allocations.
++     *
++     * Example:
++     *
++     * Room A = 2
++     * Room B = 3
++     * Room C = 1
++     *
++     * Total = 6
++     */
++    const totalRequired =
++      examAllocations.reduce(
++        (total, allocation) =>
++          total +
++          allocation.requiredInvigilators,
++        0,
++      );
++
++    /*
++     * Calculate current workload of professors.
++     *
++     * Only accepted duties count.
++     */
++    const workloadAgg =
++      await ExamDuty.aggregate([
++        {
++          $match: {
++            status: "Accepted",
++          },
++        },
++        {
++          $group: {
++            _id: "$professorId",
++            count: {
++              $sum: 1,
++            },
++          },
++        },
++      ]);
+ 
+-    const workloadAgg = await ExamDuty.aggregate([
+-      { $match: { status: "Accepted" } },
+-      { $group: { _id: "$professorId", count: { $sum: 1 } } },
+-    ]);
+     const workloadMap = {};
++
+     for (const entry of workloadAgg) {
+-      workloadMap[String(entry._id)] = entry.count;
++      workloadMap[
++        String(entry._id)
++      ] = entry.count;
+     }
+ 
+-    for (const exam of exams) {
+-      const examAllocations = await ExamAllocation.find({ examId: exam._id });
+-      if (!examAllocations.length) continue;
+-
+-      const candidates = await ExamDuty.find({
++    /*
++     * Get professors who accepted this exam
++     * and do not already have a venue.
++     */
++    const candidates =
++      await ExamDuty.find({
+         examId: exam._id,
+         status: "Accepted",
+-        $or: [{ venueId: { $exists: false } }, { venueId: null }],
++        $or: [
++          {
++            venueId: {
++              $exists: false,
++            },
++          },
++          {
++            venueId: null,
++          },
++        ],
+       });
+ 
+-      if (!candidates.length) continue;
++    if (!candidates.length) {
++      return res.status(400).json({
++        success: false,
++        message:
++          "No accepted and unassigned professors are available for this exam",
++      });
++    }
+ 
+-      const examDateStr = new Date(exam.examDate).toDateString();
+-      const examStart = timeToMinutes(exam.startTime);
+-      const examEnd = timeToMinutes(exam.endTime);
++    /*
++     * Filter professors by:
++     *
++     * 1. Availability
++     * 2. Existing exam time conflicts
++     */
++    const eligibleCandidates = [];
+ 
+-      const filteredCandidates = [];
+-      for (const duty of candidates) {
+-        const clashingDuties = await ExamDuty.find({
+-          professorId: duty.professorId,
+-          status: "Accepted",
+-          examId: { $ne: exam._id },
+-        }).populate({ path: "examId", select: "examDate startTime endTime" });
+-
+-        let hasOverlap = false;
+-        for (const other of clashingDuties) {
+-          if (!other.examId) continue;
+-          const otherDateStr = new Date(other.examId.examDate).toDateString();
+-          if (otherDateStr !== examDateStr) continue;
+-          const otherStart = timeToMinutes(other.examId.startTime);
+-          const otherEnd = timeToMinutes(other.examId.endTime);
+-          if (examStart < otherEnd && examEnd > otherStart) {
+-            hasOverlap = true;
+-            break;
+-          }
+-        }
++    for (const duty of candidates) {
++      const available =
++        await isProfessorAvailable(
++          duty.professorId,
++          exam,
++        );
+ 
+-        if (!hasOverlap) filteredCandidates.push(duty);
++      if (!available) {
++        continue;
+       }
+ 
+-      filteredCandidates.sort((a, b) => {
+-        const wa = workloadMap[String(a.professorId)] || 0;
+-        const wb = workloadMap[String(b.professorId)] || 0;
+-        return wa - wb;
++      const hasConflict =
++        await hasTimeConflict(
++          duty,
++          exam,
++        );
++
++      if (hasConflict) {
++        continue;
++      }
++
++      eligibleCandidates.push(duty);
++    }
++
++    if (!eligibleCandidates.length) {
++      return res.status(400).json({
++        success: false,
++        message:
++          "No eligible professors are available after checking availability and time conflicts",
+       });
++    }
++
++    /*
++     * Lowest workload professors are selected first.
++     */
++    eligibleCandidates.sort(
++      (a, b) => {
++        const workloadA =
++          workloadMap[
++            String(a.professorId)
++          ] || 0;
+ 
+-      let candidateIndex = 0;
++        const workloadB =
++          workloadMap[
++            String(b.professorId)
++          ] || 0;
++
++        return workloadA - workloadB;
++      },
++    );
++
++    let candidateIndex = 0;
++    let totalAssigned = 0;
+ 
+-      for (const allocation of examAllocations) {
+-        const alreadyAssigned = await ExamDuty.countDocuments({
++    /*
++     * Assign professors classroom by classroom.
++     */
++    for (const allocation of examAllocations) {
++      /*
++       * Count professors already assigned
++       * to this classroom.
++       */
++      const alreadyAssigned =
++        await ExamDuty.countDocuments({
+           examId: exam._id,
+           venueId: allocation.venueId,
++          status: "Accepted",
+         });
+ 
+-        const needed = allocation.requiredInvigilators - alreadyAssigned;
++      const needed =
++        allocation.requiredInvigilators -
++        alreadyAssigned;
++
++      if (needed <= 0) {
++        continue;
++      }
++
++      for (
++        let i = 0;
++        i < needed;
++        i++
++      ) {
++        if (
++          candidateIndex >=
++          eligibleCandidates.length
++        ) {
++          break;
++        }
++
++        const duty =
++          eligibleCandidates[
++            candidateIndex
++          ];
+ 
+-        for (let i = 0; i < needed; i++) {
+-          if (candidateIndex >= filteredCandidates.length) break;
++        /*
++         * Assign this professor to
++         * this specific classroom.
++         */
++        duty.venueId =
++          allocation.venueId;
+ 
+-          const duty = filteredCandidates[candidateIndex];
+-          duty.venueId = allocation.venueId;
+-          await duty.save();
++        await duty.save();
+ 
+-          workloadMap[String(duty.professorId)] =
+-            (workloadMap[String(duty.professorId)] || 0) + 1;
++        const professorKey =
++          String(
++            duty.professorId,
++          );
+ 
++        workloadMap[
++          professorKey
++        ] =
++          (workloadMap[
++            professorKey
++          ] || 0) + 1;
++
++        /*
++         * Notification is kept for now.
++         * Your friend can handle/refactor this part later.
++         */
++        try {
+           await Notification.create({
+-            userId: duty.professorId,
+-            title: "Exam Duty Venue Assigned",
+-            message: `You have been assigned a venue for ${exam.subjectName} (${exam.subjectCode}) on ${new Date(exam.examDate).toDateString()}.`,
+-            type: "duty_assigned",
++            userId:
++              duty.professorId,
++            title:
++              "Exam Duty Venue Assigned",
++            message:
++              `You have been assigned a venue for ${exam.subjectName} (${exam.subjectCode}) on ${new Date(exam.examDate).toDateString()}.`,
++            type:
++              "duty_assigned",
+             relatedId: duty._id,
+           });
+-
+-          candidateIndex++;
+-          totalAssigned++;
++        } catch (notificationError) {
++          /*
++           * Notification failure should NOT
++           * break the actual allocation.
++           */
++          console.error(
++            "Notification creation failed:",
++            notificationError.message,
++          );
+         }
++
++        candidateIndex++;
++        totalAssigned++;
++      }
++
++      /*
++       * If we run out of professors,
++       * stop assigning further classrooms.
++       */
++      if (
++        candidateIndex >=
++        eligibleCandidates.length
++      ) {
++        break;
+       }
+     }
+ 
++    /*
++     * Count final assigned professors.
++     */
++    const finalAssigned =
++      await ExamDuty.countDocuments({
++        examId: exam._id,
++        status: "Accepted",
++        venueId: {
++          $exists: true,
++          $ne: null,
++        },
++      });
++
++    const complete =
++      finalAssigned >= totalRequired;
++
+     return res.status(200).json({
+       success: true,
+-      message: `Successfully allocated ${totalAssigned} professors to venues`,
++
++      message: complete
++        ? `Successfully allocated ${finalAssigned} professors across all classrooms`
++        : `Allocation completed partially. ${finalAssigned} of ${totalRequired} required professors are assigned`,
++
+       totalAssigned,
++
++      totalRequired,
++
++      finalAssigned,
++
++      fullyAllocated: complete,
+     });
+   } catch (error) {
+-    console.error("Generate allocation error:", error.message);
++    console.error(
++      "Generate allocation error:",
++      error.message,
++    );
++
+     return res.status(500).json({
+       success: false,
+-      message: "Unable to generate allocations",
++      message:
++        "Unable to generate allocations",
+     });
+   }
+ };
+diff --git a/backend/src/index.js b/backend/src/index.js
+index 96a5465..33507f2 100644
+--- a/backend/src/index.js
++++ b/backend/src/index.js
+@@ -1,4 +1,5 @@
+-require("dotenv").config({ quiet: true });
++require("dotenv").config({ path: "../.env", quiet: true });
++
+ const app = require("./app.js");
+ const connectDB = require("./config/db.js");
+ 
+@@ -9,56 +10,100 @@ const { Server } = require("socket.io");
+ const User = require("./models/user.model.js");
+ 
+ const server = http.createServer(app);
++
+ const io = new Server(server, {
+   cors: {
+-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
++    origin:
++      process.env.FRONTEND_URL ||
++      "http://localhost:5173",
++    methods: [
++      "GET",
++      "POST",
++      "PUT",
++      "PATCH",
++      "DELETE",
++    ],
+     credentials: true,
+-  }
++  },
+ });
+ 
+ app.set("io", io);
+ 
+ io.on("connection", (socket) => {
+-  console.log("New client connected:", socket.id);
++  console.log(
++    "New client connected:",
++    socket.id,
++  );
++
+   socket.on("disconnect", () => {
+-    console.log("Client disconnected:", socket.id);
++    console.log(
++      "Client disconnected:",
++      socket.id,
++    );
+   });
+ });
+ 
++const seedDefaultUsers = async () => {
++  try {
++    const adminExists = await User.findOne({
++      email: "admin@invigio.com",
++    });
++
++    if (!adminExists) {
++      await User.create({
++        name: "Admin",
++        email: "admin@invigio.com",
++        password: "password123",
++        role: "ADMIN",
++        phone: "9876543210",
++      });
++
++      console.log(
++        "Default Admin account created.",
++      );
++    }
++
++    const professorExists = await User.findOne({
++      email: "professor@invigio.com",
++    });
++
++    if (!professorExists) {
++      await User.create({
++        name: "Professor",
++        email: "professor@invigio.com",
++        password: "password123",
++        role: "PROFESSOR",
++        phone: "9876543211",
++        department: "INFT",
++      });
++
++      console.log(
++        "Default Professor account created.",
++      );
++    }
++  } catch (error) {
++    console.error(
++      "Default user seeding failed:",
++      error.message,
++    );
++  }
++};
++
+ connectDB()
+   .then(async () => {
+-    try {
+-      const adminExists = await User.findOne({ email: "admin@invigio.com" });
+-      if (!adminExists) {
+-        await User.create({
+-          name: "Admin",
+-          email: "admin@invigio.com",
+-          password: "password123",
+-          role: "ADMIN",
+-          phone: "9876543210",
+-        });
+-        await User.create({
+-          name: "Professor",
+-          email: "professor@invigio.com",
+-          password: "password123",
+-          role: "PROFESSOR",
+-          phone: "9876543211",
+-          department: "INFT",
+-        });
+-        console.log(
+-          "Database seeded with default Admin and Professor accounts.",
+-        );
+-      }
+-    } catch (e) {
+-      console.error("Seeding failed:", e);
+-    }
++    await seedDefaultUsers();
+ 
+     server.listen(PORT, () => {
+-      console.log(`Server is running on port http://localhost:${PORT}`);
++      console.log(
++        `Server is running on port http://localhost:${PORT}`,
++      );
+     });
+   })
+   .catch((error) => {
+-    console.error("Failed to connect to the database:", error.message);
++    console.error(
++      "Failed to connect to the database:",
++      error.message,
++    );
++
+     process.exit(1);
+-  });
++  });
+\ No newline at end of file
+diff --git a/backend/src/models/exam.model.js b/backend/src/models/exam.model.js
+index 09eb514..695654d 100644
+--- a/backend/src/models/exam.model.js
++++ b/backend/src/models/exam.model.js
+@@ -31,9 +31,7 @@ const examSchema = new mongoose.Schema(
+       type: [String],
+       required: [true, "At least one branch is required"],
+       validate: {
+-        validator: function (v) {
+-          return Array.isArray(v) && v.length > 0;
+-        },
++        validator: (v) => Array.isArray(v) && v.length > 0,
+         message: "You must specify at least one branch.",
+       },
+     },
+@@ -55,15 +53,8 @@ const examSchema = new mongoose.Schema(
+       trim: true,
+     },
+ 
+-    requiredInvigilators: {
+-      type: Number,
+-      required: [true, "Number of required invigilators is required"],
+-      min: [1, "Must require at least 1 invigilator"],
+-    },
+-
+     status: {
+       type: String,
+-      required: true,
+       enum: [
+         "Draft",
+         "Scheduled",
+@@ -75,9 +66,7 @@ const examSchema = new mongoose.Schema(
+       default: "Scheduled",
+     },
+   },
+-  { timestamps: true },
++  { timestamps: true }
+ );
+ 
+-const Exam = mongoose.model("Exam", examSchema);
+-
+-module.exports = Exam;
++module.exports = mongoose.model("Exam", examSchema);
+\ No newline at end of file
+diff --git a/backend/src/models/examAllocation.model.js b/backend/src/models/examAllocation.model.js
+index 0d9bc56..7fc6f99 100644
+--- a/backend/src/models/examAllocation.model.js
++++ b/backend/src/models/examAllocation.model.js
+@@ -6,17 +6,31 @@ const examAllocationSchema = new mongoose.Schema(
+       type: mongoose.Schema.Types.ObjectId,
+       ref: "Exam",
+       required: [true, "Exam reference is required"],
++      index: true,
+     },
++
+     venueId: {
+       type: mongoose.Schema.Types.ObjectId,
+       ref: "Venue",
+       required: [true, "Venue reference is required"],
++      index: true,
+     },
+ 
+     requiredInvigilators: {
+       type: Number,
+-      required: [true, "Number of required invigilators is required"],
+-      min: [1, "At least 1 invigilator is required"],
++      required: [
++        true,
++        "Number of required invigilators is required",
++      ],
++      min: [
++        1,
++        "At least 1 invigilator is required",
++      ],
++      validate: {
++        validator: Number.isInteger,
++        message:
++          "requiredInvigilators must be a whole number",
++      },
+     },
+   },
+   {
+@@ -24,6 +38,21 @@ const examAllocationSchema = new mongoose.Schema(
+   },
+ );
+ 
+-const ExamAllocation = mongoose.model("ExamAllocation", examAllocationSchema);
++/*
++ * An exam cannot have the same venue allocated
++ * more than once.
++ *
++ * This protects the database even if two requests
++ * arrive at nearly the same time.
++ */
++examAllocationSchema.index(
++  { examId: 1, venueId: 1 },
++  { unique: true },
++);
++
++const ExamAllocation = mongoose.model(
++  "ExamAllocation",
++  examAllocationSchema,
++);
+ 
+-module.exports = ExamAllocation;
++module.exports = ExamAllocation;
+\ No newline at end of file
+diff --git a/backend/src/models/examDuty.model.js b/backend/src/models/examDuty.model.js
+index 7b80752..40908f1 100644
+--- a/backend/src/models/examDuty.model.js
++++ b/backend/src/models/examDuty.model.js
+@@ -7,34 +7,66 @@ const examDutySchema = new mongoose.Schema(
+       ref: "Exam",
+       required: [true, "Exam reference is required"],
+     },
++
+     professorId: {
+       type: mongoose.Schema.Types.ObjectId,
+       ref: "User",
+       required: [true, "Professor reference is required"],
+     },
++
+     role: {
+       type: String,
++      enum: ["Invigilator"],
+       default: "Invigilator",
+     },
++
+     status: {
+       type: String,
+       enum: ["Pending", "Accepted", "Rejected"],
+       default: "Pending",
+     },
++
+     venueId: {
+       type: mongoose.Schema.Types.ObjectId,
+       ref: "Venue",
+     },
++
+     rejectionReason: {
+       type: String,
+       default: "",
++      trim: true,
+     },
+   },
+   {
+     timestamps: true,
+-  }
++  },
+ );
+ 
+-const ExamDuty = mongoose.model("ExamDuty", examDutySchema);
++/*
++ * One professor can have only ONE duty record
++ * for a particular exam.
++ *
++ * This prevents:
++ *
++ * Exam A + Professor X
++ * Exam A + Professor X
++ * Exam A + Professor X
++ *
++ * from being created accidentally.
++ */
++examDutySchema.index(
++  {
++    examId: 1,
++    professorId: 1,
++  },
++  {
++    unique: true,
++  },
++);
++
++const ExamDuty = mongoose.model(
++  "ExamDuty",
++  examDutySchema,
++);
+ 
+-module.exports = ExamDuty;
++module.exports = ExamDuty;
+\ No newline at end of file
+diff --git a/backend/src/scripts/seed.js b/backend/src/scripts/seed.js
+index 418bfe7..7f88f47 100644
+--- a/backend/src/scripts/seed.js
++++ b/backend/src/scripts/seed.js
+@@ -1,5 +1,7 @@
++const path = require("path");
++
+ require("dotenv").config({
+-  path: require("path").resolve(__dirname, "../../.env"),
++  path: path.resolve(__dirname, "../../../.env"),
+ });
+ 
+ const mongoose = require("mongoose");
+@@ -53,18 +55,29 @@ const users = [
+ 
+ const seedDemoUsers = async () => {
+   await connectDB();
++
+   let created = 0;
+ 
+   for (const userData of users) {
+-    const existingUser = await User.findOne({ email: userData.email });
++    const existingUser = await User.findOne({
++      email: userData.email,
++    });
++
+     if (existingUser) {
+       console.log(`Skipped existing user: ${userData.email}`);
+       continue;
+     }
+ 
+-    await User.create({ ...userData, isActive: true });
++    await User.create({
++      ...userData,
++      isActive: true,
++    });
++
+     created += 1;
+-    console.log(`Created ${userData.role.toLowerCase()}: ${userData.email}`);
++
++    console.log(
++      `Created ${userData.role.toLowerCase()}: ${userData.email}`,
++    );
+   }
+ 
+   console.log(`Finished. ${created} user(s) created.`);
+@@ -80,4 +93,4 @@ seedDemoUsers()
+   })
+   .finally(async () => {
+     await mongoose.disconnect();
+-  });
++  });
+\ No newline at end of file

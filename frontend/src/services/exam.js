@@ -29,3 +29,13 @@ export const cancelExam = async (id) => {
   const response = await api.patch(`/api/exams/${id}/cancel`);
   return response.data;
 };
+
+export const volunteerForExam = async (id) => {
+  const response = await api.post(`/api/exams/${id}/volunteer`);
+  return response.data;
+};
+
+export const assignVolunteer = async (id, professorId) => {
+  const response = await api.post(`/api/exams/${id}/assign-volunteer`, { professorId });
+  return response.data;
+};

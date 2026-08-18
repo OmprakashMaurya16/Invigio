@@ -10,12 +10,29 @@ import {
   User
 } from "lucide-react";
 import UserSettingsModal from "./UserSettingsModal";
+import { getMyNotifications } from "../services/notification";
 
 const Navbar = ({ menuItems, onLogout, userRole = "admin" }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    const fetchUnread = async () => {
+      try {
+        const data = await getMyNotifications();
+        if (data.success && data.notifications) {
+          const unread = data.notifications.filter(n => !n.isRead).length;
+          setUnreadCount(unread);
+        }
+      } catch (error) {
+        console.error("Failed to fetch notification count:", error);
+      }
+    };
+    fetchUnread();
+  }, []);
 
   const handleLogout = () => {
     onLogout();
@@ -68,6 +85,12 @@ const Navbar = ({ menuItems, onLogout, userRole = "admin" }) => {
               {/* Notifications */}
               <Link to={userRole === "admin" ? "/admin/notifications" : "/professor/notifications"} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative hidden sm:block">
                 <Bell size={20} />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  </span>
+                )}
               </Link>
 
               {/* User Profile Dropdown */}

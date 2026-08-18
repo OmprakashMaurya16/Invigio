@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Calendar, ClipboardList, AlertTriangle, UserMinus, Upload, Zap, Plus, Eye, Filter, AlertCircle } from "lucide-react";
+import { getExams } from "../../services/exam";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -8,57 +9,32 @@ const AdminDashboard = () => {
   const [statusFilter, setStatusFilter] = useState("All");
   const itemsPerPage = 5;
 
-  const initialExams = [
-    { id: 100, subject: "Advanced Macroeconomics", code: "ECON-402", yearBranch: "2024 / ECON", sem: "IV", date: "Oct 24, 2024", time: "09:00 AM", reqs: "1 / 1", alloc: "1 / 1", status: "PENDING" },
-    { id: 1, subject: "Operating Systems", code: "CS-402", yearBranch: "2024 / CSE", sem: "IV", date: "May 12, 2024", time: "09:00 AM", reqs: "12 / 18", alloc: "12 / 18", status: "CONFIRMED" },
-    { id: 2, subject: "Data Structures", code: "CS-201", yearBranch: "2026 / CSE", sem: "II", date: "May 12, 2024", time: "02:00 PM", reqs: "10 / 15", alloc: "8 / 15", status: "IN PROGRESS" },
-    { id: 3, subject: "Applied Physics", code: "PY-101", yearBranch: "2027 / ALL", sem: "I", date: "May 13, 2024", time: "09:00 AM", reqs: "40 / 60", alloc: "0 / 0", status: "CONFLICT" },
-    { id: 4, subject: "Thermodynamics", code: "ME-301", yearBranch: "2025 / MECH", sem: "III", date: "May 13, 2024", time: "09:00 AM", reqs: "15 / 22", alloc: "15 / 22", status: "CONFIRMED" },
-    { id: 5, subject: "Discrete Mathematics", code: "MA-202", yearBranch: "2026 / CSE", sem: "II", date: "May 14, 2024", time: "02:00 PM", reqs: "25 / 35", alloc: "-- / --", status: "DRAFT" },
-    { id: 6, subject: "Computer Networks", code: "CS-501", yearBranch: "2024 / CSE", sem: "V", date: "May 15, 2024", time: "09:00 AM", reqs: "14 / 20", alloc: "14 / 20", status: "CONFIRMED" },
-    { id: 7, subject: "Machine Learning", code: "CS-601", yearBranch: "2024 / CSE", sem: "VI", date: "May 15, 2024", time: "02:00 PM", reqs: "10 / 12", alloc: "5 / 12", status: "IN PROGRESS" },
-    { id: 8, subject: "Fluid Mechanics", code: "ME-401", yearBranch: "2025 / MECH", sem: "IV", date: "May 16, 2024", time: "09:00 AM", reqs: "18 / 25", alloc: "0 / 0", status: "CONFLICT" },
-    { id: 9, subject: "Engineering Chemistry", code: "CH-101", yearBranch: "2027 / ALL", sem: "I", date: "May 16, 2024", time: "02:00 PM", reqs: "35 / 50", alloc: "35 / 50", status: "CONFIRMED" },
-    { id: 10, subject: "Digital Logic Design", code: "EC-301", yearBranch: "2025 / ECE", sem: "III", date: "May 17, 2024", time: "09:00 AM", reqs: "20 / 30", alloc: "-- / --", status: "DRAFT" },
-    { id: 11, subject: "Microprocessors", code: "EC-501", yearBranch: "2024 / ECE", sem: "V", date: "May 18, 2024", time: "09:00 AM", reqs: "15 / 20", alloc: "10 / 20", status: "IN PROGRESS" },
-    { id: 12, subject: "Software Engineering", code: "CS-403", yearBranch: "2024 / CSE", sem: "IV", date: "May 18, 2024", time: "02:00 PM", reqs: "12 / 16", alloc: "12 / 16", status: "CONFIRMED" },
-  ];
-
-  const [upcomingExams, setUpcomingExams] = useState(() => {
-    const exams = [...initialExams];
-    if (localStorage.getItem("dutyConfirmed_ECON402") === "true") {
-      const econExam = exams.find(e => e.code === "ECON-402");
-      if (econExam) econExam.status = "CONFIRMED";
-    }
-    return exams;
-  });
+  const [upcomingExams, setUpcomingExams] = useState([]);
 
   useEffect(() => {
-    const handleStorageChange = (e) => {
-      // If the professor confirms duty in another tab, update the admin dashboard
-      if (e.key === "dutyConfirmed_ECON402" && e.newValue === "true") {
-        setUpcomingExams(prev => 
-          prev.map(exam => exam.code === "ECON-402" ? { ...exam, status: "CONFIRMED" } : exam)
-        );
+    const fetchExams = async () => {
+      try {
+        const data = await getExams();
+        if (data.success && data.exams) {
+          const formattedExams = data.exams.map(exam => ({
+            id: exam._id,
+            subject: exam.subjectName,
+            code: exam.subjectCode,
+            yearBranch: `${exam.academicYear} / ${Array.isArray(exam.branch) ? exam.branch.join(", ") : exam.branch}`,
+            sem: ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"][exam.semester - 1] || exam.semester,
+            date: new Date(exam.examDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+            time: exam.startTime,
+            reqs: exam.volunteers?.length ? `${exam.volunteers.length} Vols` : "-- / --",
+            alloc: "-- / --",
+            status: exam.status?.toUpperCase() || "PENDING"
+          }));
+          setUpcomingExams(formattedExams);
+        }
+      } catch (error) {
+        console.error("Failed to fetch exams:", error);
       }
     };
-
-    // Note: The storage event only fires for changes made in *other* documents (tabs/windows)
-    window.addEventListener("storage", handleStorageChange);
-    
-    // Also periodically poll in case it changes in the same window (e.g. they switch routes without reloading)
-    const interval = setInterval(() => {
-      if (localStorage.getItem("dutyConfirmed_ECON402") === "true") {
-        setUpcomingExams(prev => 
-          prev.map(exam => exam.code === "ECON-402" && exam.status !== "CONFIRMED" ? { ...exam, status: "CONFIRMED" } : exam)
-        );
-      }
-    }, 1000);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      clearInterval(interval);
-    };
+    fetchExams();
   }, []);
 
   const filteredExams = statusFilter === "All" 

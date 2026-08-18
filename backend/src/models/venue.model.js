@@ -15,6 +15,11 @@ const venueSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
+
+    capacity: {
+      type: Number,
+      default: 30,
+    },
   },
   { timestamps: true },
 );

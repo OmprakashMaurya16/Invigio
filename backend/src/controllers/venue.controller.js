@@ -2,7 +2,7 @@ const Venue = require("../models/venue.model.js");
 
 const createVenue = async (req, res) => {
   try {
-    const { block, room } = req.body;
+    const { block, room, capacity } = req.body;
 
     if (!block || !room) {
       return res.status(400).json({
@@ -23,10 +23,10 @@ const createVenue = async (req, res) => {
       });
     }
 
-    const venue = await Venue.create({
-      block: block.toUpperCase(),
-      room: room.toUpperCase(),
-    });
+    const venueData = { block: block.toUpperCase(), room: room.toUpperCase() };
+    if (capacity !== undefined) venueData.capacity = capacity;
+
+    const venue = await Venue.create(venueData);
 
     return res.status(201).json({
       success: true,
@@ -102,7 +102,7 @@ const getVenueById = async (req, res) => {
 const updateVenue = async (req, res) => {
   try {
     const { id } = req.params;
-    const { block, room } = req.body;
+    const { block, room, capacity } = req.body;
 
     const venue = await Venue.findById(id);
 
@@ -131,6 +131,7 @@ const updateVenue = async (req, res) => {
 
     venue.block = newBlock;
     venue.room = newRoom;
+    if (capacity !== undefined) venue.capacity = capacity;
 
     await venue.save();
 
